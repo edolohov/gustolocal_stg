@@ -818,7 +818,7 @@ function gustolocal_add_delivery_fee() {
 // Подключаем JavaScript для обработки опций доставки
 add_action('wp_enqueue_scripts', 'gustolocal_enqueue_delivery_scripts');
 function gustolocal_enqueue_delivery_scripts() {
-    if (is_cart() || is_checkout()) {
+    if ((function_exists('is_cart') && is_cart()) || (function_exists('is_checkout') && is_checkout())) {
         wp_enqueue_script(
             'gustolocal-delivery',
             get_template_directory_uri() . '/assets/js/delivery-options.js',
@@ -892,7 +892,7 @@ add_filter('woocommerce_return_to_shop_redirect', function() {
 
 // Принудительно использовать правильный header для checkout
 add_filter('render_block_core/template-part', function($block_content, $block) {
-    if (is_checkout() && isset($block['attrs']['slug']) && $block['attrs']['slug'] === 'header') {
+    if (function_exists('is_checkout') && is_checkout() && isset($block['attrs']['slug']) && $block['attrs']['slug'] === 'header') {
         // Загружаем правильный header из файла
         $header_file = get_template_directory() . '/parts/header.html';
         if (file_exists($header_file)) {
@@ -913,7 +913,7 @@ add_filter('render_block_core/template-part', function($block_content, $block) {
 
 // Альтернативный подход: перехватываем через get_block_template
 add_filter('get_block_template', function($template, $id, $template_type) {
-    if ($template_type === 'wp_template_part' && is_checkout()) {
+    if ($template_type === 'wp_template_part' && function_exists('is_checkout') && is_checkout()) {
         if (($id === 'gustolocal//header' || $id === 'header') && isset($template->slug) && $template->slug === 'header') {
             $header_file = get_template_directory() . '/parts/header.html';
             if (file_exists($header_file)) {
@@ -946,3 +946,15 @@ function gustolocal_remove_product_links_from_order_name($name, $item) {
     $name = preg_replace('/<a[^>]*>(.*?)<\/a>/i', '$1', $name);
     return $name;
 }
+
+// ВРЕМЕННЫЙ ОБХОД ПРОВЕРКИ ПРАВ ДЛЯ USER_ID = 1 (ADMIN)
+// ВАЖНО: Это временное решение! После восстановления прав удали этот код!
+add_filter('user_has_cap', function($allcaps, $caps, $args, $user) {
+    // Даем все права пользователю с ID = 1
+    if (isset($user->ID) && $user->ID == 1) {
+        foreach ($caps as $cap) {
+            $allcaps[$cap] = true;
+        }
+    }
+    return $allcaps;
+}, 999, 4);
