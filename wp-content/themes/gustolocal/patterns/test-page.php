@@ -31,11 +31,11 @@
 
 			<!-- wp:list -->
 			<ul>
-				<li>Куриный суп с лапшой — <strong>4 порции</strong></li>
+				<li>Куриный суп с лапшой — <strong>4 порции</strong> <span class="gl-tooltip-wrapper"><span class="gl-tooltip-icon" aria-label="Информация о приготовлении">?</span><span class="gl-tooltip-content">Все наши супы надо доготовить самостоятельно. Вот так:<ul><li>Вылейте бульон в кастрюлю и доведите до кипения.</li><li>Добавьте зажарку (всё из вакуумного пакета).</li><li>Варите 10–15 минут на слабом огне.</li><li>Перед подачей добавьте зелень и сметану по желанию.</li></ul></span></span></li>
 				<li>Паста с соусом песто или пармезаном — <strong>2 порции</strong></li>
 				<li>Нежная индейка медленного приготовления — <strong>2 порции</strong></li>
-				<li>Сочные котлеты из курицы — <strong>3 × 2 шт</strong> <span style="color:var(--gl-color-text-muted)">(заморозка)</span></li>
-				<li>Домашние сырники — <strong>3 × 2 шт</strong> <span style="color:var(--gl-color-text-muted)">(заморозка)</span></li>
+				<li>Сочные котлеты из курицы — <strong>3 × 2 шт</strong> <span style="color:var(--gl-color-text-muted)">(заморозка)</span> <span class="gl-tooltip-wrapper"><span class="gl-tooltip-icon" aria-label="Информация о приготовлении">?</span><span class="gl-tooltip-content">Заморозка требует доготовки примерно 15-30 мин в духовке.</span></span></li>
+				<li>Домашние сырники — <strong>3 × 2 шт</strong> <span style="color:var(--gl-color-text-muted)">(заморозка)</span> <span class="gl-tooltip-wrapper"><span class="gl-tooltip-icon" aria-label="Информация о приготовлении">?</span><span class="gl-tooltip-content">Заморозка требует доготовки примерно 15-30 мин в духовке.</span></span></li>
 			</ul>
 			<!-- /wp:list -->
 
