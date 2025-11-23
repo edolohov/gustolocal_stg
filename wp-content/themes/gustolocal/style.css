@@ -3211,3 +3211,105 @@ main.gl-container > .wp-block-group {
     font-size: 1.125rem;
   }
 }
+
+/* Стили для уведомления о минимальном заказе */
+.gl-minimum-order-notice {
+  background: #fff3cd !important;
+  border-left: 4px solid #ffc107 !important;
+  padding: 12px !important;
+  margin-bottom: 20px !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.gl-minimum-order-notice::before {
+  display: none !important;
+}
+
+.gl-minimum-order-notice strong {
+  margin-right: 4px;
+}
+
+/* Стили для всплывающих подсказок (tooltip) */
+.gl-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.375rem;
+}
+
+.gl-tooltip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--gl-color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: help;
+  line-height: 1;
+  transition: background-color 0.2s ease;
+}
+
+.gl-tooltip-icon:hover {
+  background: var(--gl-color-primary-dark);
+}
+
+.gl-tooltip-content {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: normal;
+  width: 280px;
+  max-width: 90vw;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+  transform: translateX(-50%) translateY(-4px);
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.gl-tooltip-content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1a1a1a;
+}
+
+.gl-tooltip-wrapper:hover .gl-tooltip-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.gl-tooltip-content ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.gl-tooltip-content li {
+  margin-bottom: 4px;
+}
+
+.gl-tooltip-content li:last-child {
+  margin-bottom: 0;
+}

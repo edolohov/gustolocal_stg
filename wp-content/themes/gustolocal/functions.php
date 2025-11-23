@@ -958,3 +958,2452 @@ add_filter('user_has_cap', function($allcaps, $caps, $args, $user) {
     }
     return $allcaps;
 }, 999, 4);
+
+/* ============ Настройки минимального заказа ============ */
+// Добавляем страницу настроек в админке
+add_action('admin_menu', 'gustolocal_add_minimum_order_settings_page');
+function gustolocal_add_minimum_order_settings_page() {
+    add_submenu_page(
+        'woocommerce',
+        'Минимальный заказ',
+        'Минимальный заказ',
+        'manage_options',
+        'gustolocal-minimum-order',
+        'gustolocal_minimum_order_settings_page'
+    );
+}
+
+// Страница настроек минимального заказа
+function gustolocal_minimum_order_settings_page() {
+    // Сохранение настроек
+    if (isset($_POST['gustolocal_save_minimum_order']) && check_admin_referer('gustolocal_minimum_order_settings')) {
+        $enabled = isset($_POST['minimum_order_enabled']) ? 1 : 0;
+        $amount = floatval($_POST['minimum_order_amount']);
+        $message = sanitize_text_field($_POST['minimum_order_message']);
+        
+        update_option('gustolocal_minimum_order_enabled', $enabled);
+        update_option('gustolocal_minimum_order_amount', $amount);
+        update_option('gustolocal_minimum_order_message', $message);
+        
+        echo '<div class="notice notice-success"><p>Настройки сохранены!</p></div>';
+    }
+    
+    // Получаем текущие настройки
+    $enabled = get_option('gustolocal_minimum_order_enabled', 0);
+    $amount = get_option('gustolocal_minimum_order_amount', 60.00);
+    $message = get_option('gustolocal_minimum_order_message', 'Минимальная сумма заказа: {amount} €. Добавьте товаров на {remaining} €.');
+    
+    ?>
+    <div class="wrap">
+        <h1>Настройки минимального заказа</h1>
+        <form method="post" action="">
+            <?php wp_nonce_field('gustolocal_minimum_order_settings'); ?>
+            
+            <table class="form-table">
+                <tr>
+                    <th scope="row">
+                        <label for="minimum_order_enabled">Включить минимальный заказ</label>
+                    </th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="minimum_order_enabled" value="1" <?php checked($enabled, 1); ?>>
+                            Включить проверку минимальной суммы заказа
+                        </label>
+                        <p class="description">Когда включено, пользователи не смогут оформить заказ, если сумма меньше указанной.</p>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row">
+                        <label for="minimum_order_amount">Минимальная сумма заказа (€)</label>
+                    </th>
+                    <td>
+                        <input type="number" 
+                               name="minimum_order_amount" 
+                               id="minimum_order_amount" 
+                               value="<?php echo esc_attr($amount); ?>" 
+                               step="0.01" 
+                               min="0" 
+                               class="regular-text">
+                        <p class="description">Минимальная сумма заказа в евро (без учета доставки).</p>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row">
+                        <label for="minimum_order_message">Сообщение об ошибке</label>
+                    </th>
+                    <td>
+                        <textarea name="minimum_order_message" 
+                                  id="minimum_order_message" 
+                                  rows="3" 
+                                  class="large-text"><?php echo esc_textarea($message); ?></textarea>
+                        <p class="description">
+                            Сообщение, которое увидит пользователь, если сумма заказа меньше минимальной.<br>
+                            Используйте <code>{amount}</code> для суммы минимального заказа и <code>{remaining}</code> для недостающей суммы.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            
+            <?php submit_button('Сохранить настройки', 'primary', 'gustolocal_save_minimum_order'); ?>
+        </form>
+        
+        <hr>
+        
+        <h2>Текущие настройки</h2>
+        <table class="form-table">
+            <tr>
+                <th>Статус:</th>
+                <td><strong><?php echo $enabled ? 'Включено' : 'Выключено'; ?></strong></td>
+            </tr>
+            <tr>
+                <th>Минимальная сумма:</th>
+                <td><strong><?php echo number_format($amount, 2, ',', ' '); ?> €</strong></td>
+            </tr>
+            <tr>
+                <th>Сообщение:</th>
+                <td><?php echo esc_html($message); ?></td>
+            </tr>
+        </table>
+    </div>
+    <?php
+}
+
+// Валидация минимального заказа при оформлении
+add_action('woocommerce_checkout_process', 'gustolocal_validate_minimum_order');
+function gustolocal_validate_minimum_order() {
+    // Проверяем, включена ли функция
+    $enabled = get_option('gustolocal_minimum_order_enabled', 0);
+    if (!$enabled) {
+        return; // Функция выключена, не проверяем
+    }
+    
+    // Проверяем, что WooCommerce активен
+    if (!function_exists('WC') || !WC()->cart) {
+        return;
+    }
+    
+    $minimum_amount = floatval(get_option('gustolocal_minimum_order_amount', 60.00));
+    $message_template = get_option('gustolocal_minimum_order_message', 'Минимальная сумма заказа: {amount} €. Добавьте товаров на {remaining} €.');
+    
+    // Получаем сумму корзины БЕЗ доставки (subtotal)
+    $cart_subtotal = WC()->cart->get_subtotal();
+    
+    if ($cart_subtotal < $minimum_amount) {
+        $remaining = $minimum_amount - $cart_subtotal;
+        
+        $message = str_replace(
+            array('{amount}', '{remaining}'),
+            array(number_format($minimum_amount, 2, ',', ' ') . ' €', number_format($remaining, 2, ',', ' ') . ' €'),
+            $message_template
+        );
+        
+        wc_add_notice($message, 'error');
+    }
+}
+
+// Показываем уведомление в корзине
+add_action('woocommerce_before_cart', 'gustolocal_show_minimum_order_notice_cart');
+function gustolocal_show_minimum_order_notice_cart() {
+    // Проверяем, включена ли функция
+    $enabled = get_option('gustolocal_minimum_order_enabled', 0);
+    if (!$enabled) {
+        return; // Функция выключена, не показываем
+    }
+    
+    // Проверяем, что WooCommerce активен
+    if (!function_exists('WC') || !WC()->cart) {
+        return;
+    }
+    
+    $minimum_amount = floatval(get_option('gustolocal_minimum_order_amount', 60.00));
+    $cart_subtotal = WC()->cart->get_subtotal();
+    
+    if ($cart_subtotal < $minimum_amount) {
+        $remaining = $minimum_amount - $cart_subtotal;
+        
+        $message = sprintf(
+            'Минимальная сумма заказа: <strong>%s €</strong>. Добавьте товаров на <strong>%s €</strong>.',
+            number_format($minimum_amount, 2, ',', ' '),
+            number_format($remaining, 2, ',', ' ')
+        );
+        
+        echo '<div class="gl-minimum-order-notice" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 20px; border-radius: 4px;">';
+        echo '<strong>⚠️ Минимальный заказ:</strong> ' . $message;
+        echo '</div>';
+    }
+}
+
+// Показываем уведомление на странице чекаута
+add_action('woocommerce_before_checkout_form', 'gustolocal_show_minimum_order_notice_checkout');
+function gustolocal_show_minimum_order_notice_checkout() {
+    // Проверяем, включена ли функция
+    $enabled = get_option('gustolocal_minimum_order_enabled', 0);
+    if (!$enabled) {
+        return; // Функция выключена, не показываем
+    }
+    
+    // Проверяем, что WooCommerce активен
+    if (!function_exists('WC') || !WC()->cart) {
+        return;
+    }
+    
+    $minimum_amount = floatval(get_option('gustolocal_minimum_order_amount', 60.00));
+    $cart_subtotal = WC()->cart->get_subtotal();
+    
+    if ($cart_subtotal < $minimum_amount) {
+        $remaining = $minimum_amount - $cart_subtotal;
+        
+        $message = sprintf(
+            'Минимальная сумма заказа: <strong>%s €</strong>. Добавьте товаров на <strong>%s €</strong>.',
+            number_format($minimum_amount, 2, ',', ' '),
+            number_format($remaining, 2, ',', ' ')
+        );
+        
+        echo '<div class="gl-minimum-order-notice" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 20px; border-radius: 4px;">';
+        echo '<strong>⚠️ Минимальный заказ:</strong> ' . $message;
+        echo '</div>';
+    }
+}
+
+/* ========================================
+   УПРАВЛЕНИЕ КАТЕГОРИЯМИ МЕНЮ
+   ======================================== */
+
+// Регистрация страницы настроек категорий
+add_action('admin_menu', 'gustolocal_add_category_settings_page');
+function gustolocal_add_category_settings_page() {
+    add_submenu_page(
+        'woocommerce',
+        'Категории меню',
+        'Категории меню',
+        'manage_options',
+        'gustolocal-categories',
+        'gustolocal_category_settings_page'
+    );
+}
+
+// Функция для получения всех существующих категорий из таксономии
+function gustolocal_get_all_categories() {
+    $terms = get_terms(array(
+        'taxonomy' => 'wmb_section',
+        'hide_empty' => false,
+    ));
+    
+    if (is_wp_error($terms)) {
+        return array();
+    }
+    
+    $categories = array();
+    foreach ($terms as $term) {
+        $categories[] = $term->name;
+    }
+    
+    return $categories;
+}
+
+// Функция для получения настроек категорий
+function gustolocal_get_category_settings() {
+    $settings = get_option('gustolocal_category_settings', array());
+    
+    // Если настройки пустые, инициализируем из существующих категорий
+    if (empty($settings)) {
+        $default_order = array(
+            'Завтраки и сладкое',
+            'Авторские сэндвичи и перекусы',
+            'Паста ручной работы',
+            'Основные блюда',
+            'Гарниры и зелень',
+            'Супы и крем-супы',
+            'Для запаса / в морозильник',
+        );
+        
+        $all_categories = gustolocal_get_all_categories();
+        $order = 1;
+        
+        foreach ($default_order as $cat_name) {
+            if (in_array($cat_name, $all_categories)) {
+                $settings[$cat_name] = array(
+                    'original' => $cat_name,
+                    'display' => $cat_name,
+                    'order' => $order++,
+                    'aliases' => array(),
+                );
+            }
+        }
+        
+        // Добавляем остальные категории, которых нет в дефолтном списке
+        foreach ($all_categories as $cat_name) {
+            if (!isset($settings[$cat_name])) {
+                $settings[$cat_name] = array(
+                    'original' => $cat_name,
+                    'display' => $cat_name,
+                    'order' => $order++,
+                    'aliases' => array(),
+                );
+            }
+        }
+        
+        update_option('gustolocal_category_settings', $settings);
+    }
+    
+    return $settings;
+}
+
+// Функция для получения категории по синониму
+function gustolocal_map_category_by_alias($category_name) {
+    $settings = gustolocal_get_category_settings();
+    $category_name_lower = mb_strtolower(trim($category_name));
+    
+    // Сначала проверяем точное совпадение
+    foreach ($settings as $original => $config) {
+        if (mb_strtolower($original) === $category_name_lower || 
+            mb_strtolower($config['display']) === $category_name_lower) {
+            return $original;
+        }
+    }
+    
+    // Затем проверяем синонимы
+    foreach ($settings as $original => $config) {
+        foreach ($config['aliases'] as $alias) {
+            if (mb_strtolower(trim($alias)) === $category_name_lower) {
+                return $original;
+            }
+        }
+    }
+    
+    // Проверяем частичное совпадение (для обратной совместимости)
+    foreach ($settings as $original => $config) {
+        $original_lower = mb_strtolower($original);
+        if (strpos($original_lower, $category_name_lower) !== false || 
+            strpos($category_name_lower, $original_lower) !== false) {
+            return $original;
+        }
+    }
+    
+    return $category_name; // Возвращаем как есть, если не найдено
+}
+
+// Функция для получения отображаемого названия категории
+function gustolocal_get_category_display_name($category_name) {
+    $settings = gustolocal_get_category_settings();
+    
+    if (isset($settings[$category_name]) && !empty($settings[$category_name]['display'])) {
+        return $settings[$category_name]['display'];
+    }
+    
+    return $category_name;
+}
+
+// Функция для получения отсортированного списка категорий
+function gustolocal_get_ordered_categories() {
+    $settings = gustolocal_get_category_settings();
+    
+    // Сортируем по порядку
+    uasort($settings, function($a, $b) {
+        $order_a = isset($a['order']) ? (int)$a['order'] : 999;
+        $order_b = isset($b['order']) ? (int)$b['order'] : 999;
+        
+        if ($order_a === $order_b) {
+            return strcmp($a['original'], $b['original']);
+        }
+        
+        return $order_a - $order_b;
+    });
+    
+    return $settings;
+}
+
+// Страница настроек категорий
+function gustolocal_category_settings_page() {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    // Обработка сохранения
+    if (isset($_POST['gustolocal_save_categories']) && check_admin_referer('gustolocal_categories_nonce')) {
+        $settings = array();
+        
+        if (isset($_POST['categories']) && is_array($_POST['categories'])) {
+            foreach ($_POST['categories'] as $original => $data) {
+                $settings[$original] = array(
+                    'original' => sanitize_text_field($original),
+                    'display' => sanitize_text_field($data['display'] ?? $original),
+                    'order' => isset($data['order']) ? (int)$data['order'] : 999,
+                    'aliases' => !empty($data['aliases']) 
+                        ? array_filter(array_map('trim', explode(',', sanitize_text_field($data['aliases']))))
+                        : array(),
+                );
+            }
+        }
+        
+        // Добавляем новые категории из формы
+        if (isset($_POST['new_categories']) && is_array($_POST['new_categories'])) {
+            foreach ($_POST['new_categories'] as $new_cat) {
+                $new_cat = trim($new_cat);
+                if (!empty($new_cat) && !isset($settings[$new_cat])) {
+                    $max_order = 0;
+                    foreach ($settings as $cat) {
+                        if (isset($cat['order']) && $cat['order'] > $max_order) {
+                            $max_order = $cat['order'];
+                        }
+                    }
+                    
+                    $settings[$new_cat] = array(
+                        'original' => $new_cat,
+                        'display' => $new_cat,
+                        'order' => $max_order + 1,
+                        'aliases' => array(),
+                    );
+                }
+            }
+        }
+        
+        update_option('gustolocal_category_settings', $settings);
+        echo '<div class="notice notice-success"><p>Настройки категорий сохранены!</p></div>';
+    }
+    
+    // Обработка удаления
+    if (isset($_POST['gustolocal_delete_category']) && check_admin_referer('gustolocal_categories_nonce')) {
+        $category_to_delete = sanitize_text_field($_POST['category_to_delete'] ?? '');
+        if (!empty($category_to_delete)) {
+            $settings = gustolocal_get_category_settings();
+            unset($settings[$category_to_delete]);
+            update_option('gustolocal_category_settings', $settings);
+            echo '<div class="notice notice-success"><p>Категория удалена из настроек!</p></div>';
+        }
+    }
+    
+    $settings = gustolocal_get_category_settings();
+    $all_categories = gustolocal_get_all_categories();
+    $ordered_categories = gustolocal_get_ordered_categories();
+    
+    ?>
+    <div class="wrap">
+        <h1>Управление категориями меню</h1>
+        <p>Здесь вы можете настроить порядок отображения категорий, переименовать их для отображения на сайте и добавить синонимы для автоматического маппинга при импорте CSV.</p>
+        
+        <form method="post" action="">
+            <?php wp_nonce_field('gustolocal_categories_nonce'); ?>
+            
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Порядок</th>
+                        <th>Оригинальное название</th>
+                        <th>Отображаемое название</th>
+                        <th>Синонимы (через запятую)</th>
+                        <th style="width: 100px;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($ordered_categories as $original => $config): ?>
+                        <tr>
+                            <td>
+                                <input type="number" 
+                                       name="categories[<?php echo esc_attr($original); ?>][order]" 
+                                       value="<?php echo esc_attr($config['order'] ?? 999); ?>" 
+                                       min="1" 
+                                       style="width: 60px;">
+                            </td>
+                            <td>
+                                <strong><?php echo esc_html($original); ?></strong>
+                                <?php if (!in_array($original, $all_categories)): ?>
+                                    <span style="color: #d63638;">(не найдена в таксономии)</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <input type="text" 
+                                       name="categories[<?php echo esc_attr($original); ?>][display]" 
+                                       value="<?php echo esc_attr($config['display'] ?? $original); ?>" 
+                                       class="regular-text">
+                            </td>
+                            <td>
+                                <input type="text" 
+                                       name="categories[<?php echo esc_attr($original); ?>][aliases]" 
+                                       value="<?php echo esc_attr(implode(', ', $config['aliases'] ?? array())); ?>" 
+                                       class="large-text" 
+                                       placeholder="Авторская паста, Паста, Макароны">
+                                <p class="description">Синонимы используются для автоматического маппинга при импорте CSV</p>
+                            </td>
+                            <td>
+                                <button type="submit" 
+                                        name="gustolocal_delete_category" 
+                                        value="1" 
+                                        onclick="return confirm('Удалить категорию из настроек?');"
+                                        class="button button-small">
+                                    Удалить
+                                </button>
+                                <input type="hidden" name="category_to_delete" value="<?php echo esc_attr($original); ?>">
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            
+            <h2>Добавить новую категорию</h2>
+            <p>Добавьте категорию, которая будет использоваться при импорте CSV (например, если в CSV указана категория, которой еще нет в настройках):</p>
+            <div id="new-categories-container">
+                <p>
+                    <input type="text" 
+                           name="new_categories[]" 
+                           class="regular-text" 
+                           placeholder="Название категории">
+                    <button type="button" class="button" onclick="addNewCategoryField()">+ Добавить еще</button>
+                </p>
+            </div>
+            
+            <p class="submit">
+                <input type="submit" 
+                       name="gustolocal_save_categories" 
+                       class="button button-primary" 
+                       value="Сохранить настройки">
+            </p>
+        </form>
+        
+        <hr>
+        
+        <h2>Справка</h2>
+        <ul>
+            <li><strong>Порядок</strong> — определяет последовательность отображения категорий на странице меню (меньше = выше)</li>
+            <li><strong>Отображаемое название</strong> — название, которое будет показано пользователям на сайте (может отличаться от оригинального)</li>
+            <li><strong>Синонимы</strong> — варианты названий категории, которые будут автоматически маппиться к основной категории при импорте CSV</li>
+            <li>Если категория не найдена в таксономии, она будет создана автоматически при импорте CSV</li>
+        </ul>
+        
+        <h2>Все существующие категории в таксономии</h2>
+        <ul>
+            <?php foreach ($all_categories as $cat): ?>
+                <li><?php echo esc_html($cat); ?></li>
+            <?php endforeach; ?>
+            <?php if (empty($all_categories)): ?>
+                <li><em>Категории не найдены</em></li>
+            <?php endif; ?>
+        </ul>
+    </div>
+    
+    <script>
+    function addNewCategoryField() {
+        var container = document.getElementById('new-categories-container');
+        var p = document.createElement('p');
+        p.innerHTML = '<input type="text" name="new_categories[]" class="regular-text" placeholder="Название категории"> ' +
+                      '<button type="button" class="button" onclick="this.parentElement.remove()">Удалить</button>';
+        container.appendChild(p);
+    }
+    </script>
+    <?php
+}
+
+/* ========================================
+   РАЗБОР ЗАКАЗОВ ПО ПОЗИЦИЯМ
+   ======================================== */
+
+// Регистрация страницы разбора заказов
+add_action('admin_menu', 'gustolocal_add_order_breakdown_page');
+function gustolocal_add_order_breakdown_page() {
+    add_submenu_page(
+        'woocommerce',
+        'Разбор заказов',
+        'Разбор заказов',
+        'manage_options',
+        'gustolocal-order-breakdown',
+        'gustolocal_order_breakdown_page'
+    );
+}
+
+// Функция для получения категории блюда по названию
+function gustolocal_get_dish_category($dish_name) {
+    // Ищем блюдо в таксономии wmb_section
+    $dishes = get_posts(array(
+        'post_type' => 'wmb_dish',
+        'title' => $dish_name,
+        'posts_per_page' => 1,
+        'post_status' => 'any',
+    ));
+    
+    if (!empty($dishes)) {
+        $dish_id = $dishes[0]->ID;
+        $terms = wp_get_post_terms($dish_id, 'wmb_section', array('fields' => 'names'));
+        if (!empty($terms) && !is_wp_error($terms)) {
+            $category = $terms[0];
+            // Используем отображаемое название категории, если доступно
+            if (function_exists('gustolocal_get_category_display_name')) {
+                return gustolocal_get_category_display_name($category);
+            }
+            return $category;
+        }
+    }
+    
+    return 'Прочее';
+}
+
+// Функция для получения порядка категории
+function gustolocal_get_category_order($category_name) {
+    if (function_exists('gustolocal_get_ordered_categories')) {
+        $ordered = gustolocal_get_ordered_categories();
+        foreach ($ordered as $original => $config) {
+            $display = !empty($config['display']) ? $config['display'] : $original;
+            if (mb_strtolower($display) === mb_strtolower($category_name) || 
+                mb_strtolower($original) === mb_strtolower($category_name)) {
+                return isset($config['order']) ? (int)$config['order'] : 999;
+            }
+        }
+    }
+    return 999;
+}
+
+// Функция для извлечения блюд из заказа
+function gustolocal_extract_dishes_from_order($order) {
+    $dishes = array();
+    
+    foreach ($order->get_items() as $item_id => $item) {
+        // Проверяем, есть ли payload от meal-builder
+        $payload_meta = $item->get_meta('_wmb_payload', true);
+        if (!$payload_meta) {
+            $payload_meta = $item->get_meta('Meal plan payload', true);
+        }
+        
+        if ($payload_meta) {
+            $payload = json_decode($payload_meta, true);
+            if ($payload && isset($payload['items_list']) && is_array($payload['items_list'])) {
+                foreach ($payload['items_list'] as $dish_item) {
+                    $name = isset($dish_item['name']) ? trim($dish_item['name']) : '';
+                    $qty = isset($dish_item['qty']) ? intval($dish_item['qty']) : 0;
+                    $unit = isset($dish_item['unit']) ? trim($dish_item['unit']) : '';
+                    $price = isset($dish_item['price']) ? floatval($dish_item['price']) : 0;
+                    
+                    if (empty($name) || $qty <= 0) continue;
+                    
+                    // Формируем ключ: название + единица
+                    $key = $name . ($unit ? ' (' . $unit . ')' : '');
+                    
+                    if (!isset($dishes[$key])) {
+                        $category = gustolocal_get_dish_category($name);
+                        $dishes[$key] = array(
+                            'name' => $name,
+                            'unit' => $unit,
+                            'category' => $category,
+                            'category_order' => gustolocal_get_category_order($category),
+                            'total_qty' => 0,
+                            'total_price' => 0,
+                        );
+                    }
+                    
+                    $dishes[$key]['total_qty'] += $qty;
+                    $dishes[$key]['total_price'] += $price * $qty;
+                }
+            }
+        } else {
+            // Обычный товар (не из meal-builder)
+            $product_name = $item->get_name();
+            $qty = $item->get_quantity();
+            $price = $item->get_total();
+            
+            $key = $product_name;
+            if (!isset($dishes[$key])) {
+                $dishes[$key] = array(
+                    'name' => $product_name,
+                    'unit' => '',
+                    'category' => 'Прочее',
+                    'category_order' => 999,
+                    'total_qty' => 0,
+                    'total_price' => 0,
+                );
+            }
+            
+            $dishes[$key]['total_qty'] += $qty;
+            $dishes[$key]['total_price'] += $price;
+        }
+    }
+    
+    return $dishes;
+}
+
+// Страница разбора заказов
+function gustolocal_order_breakdown_page() {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    // Проверяем, что WooCommerce активен
+    if (!function_exists('wc_get_orders')) {
+        echo '<div class="wrap"><h1>Разбор заказов</h1><div class="error"><p>WooCommerce не активирован!</p></div></div>';
+        return;
+    }
+    
+    $selected_orders = isset($_POST['order_ids']) && is_array($_POST['order_ids']) 
+        ? array_map('intval', $_POST['order_ids']) 
+        : array();
+    
+    $date_from = isset($_POST['date_from']) ? sanitize_text_field($_POST['date_from']) : date('Y-m-d', strtotime('-7 days'));
+    $date_to = isset($_POST['date_to']) ? sanitize_text_field($_POST['date_to']) : date('Y-m-d');
+    $status_filter = isset($_POST['status']) ? sanitize_text_field($_POST['status']) : '';
+    
+    // Получаем заказы для выбора
+    $orders_query = array(
+        'limit' => 500,
+        'orderby' => 'date',
+        'order' => 'DESC',
+        'date_created' => $date_from . '...' . $date_to,
+    );
+    
+    if ($status_filter) {
+        $orders_query['status'] = $status_filter;
+    }
+    
+    $all_orders = wc_get_orders($orders_query);
+    
+    // Если выбраны заказы, формируем сводку
+    $breakdown_data = null;
+    if (!empty($selected_orders)) {
+        $breakdown_data = gustolocal_generate_breakdown($selected_orders);
+    }
+    
+    ?>
+    <div class="wrap">
+        <h1>Разбор заказов по позициям</h1>
+        
+        <form method="post" action="" id="breakdown-form">
+            <div class="postbox" style="margin-top: 20px; padding: 20px;">
+                <h2>Фильтры</h2>
+                <table class="form-table">
+                    <tr>
+                        <th><label for="date_from">Дата от:</label></th>
+                        <td><input type="date" id="date_from" name="date_from" value="<?php echo esc_attr($date_from); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th><label for="date_to">Дата до:</label></th>
+                        <td><input type="date" id="date_to" name="date_to" value="<?php echo esc_attr($date_to); ?>" class="regular-text"></td>
+                    </tr>
+                    <tr>
+                        <th><label for="status">Статус:</label></th>
+                        <td>
+                            <select id="status" name="status" class="regular-text">
+                                <option value="">Все статусы</option>
+                                <?php
+                                $statuses = wc_get_order_statuses();
+                                foreach ($statuses as $status_key => $status_label) {
+                                    $selected = ($status_filter === $status_key) ? 'selected' : '';
+                                    echo '<option value="' . esc_attr($status_key) . '" ' . $selected . '>' . esc_html($status_label) . '</option>';
+                                }
+                                ?>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+                <p class="submit">
+                    <input type="submit" name="filter_orders" class="button button-primary" value="Применить фильтры">
+                </p>
+            </div>
+            
+            <div class="postbox" style="margin-top: 20px; padding: 20px;">
+                <h2>Выберите заказы</h2>
+                <p>
+                    <button type="button" class="button" onclick="selectAllOrders()">Выбрать все</button>
+                    <button type="button" class="button" onclick="deselectAllOrders()">Снять выбор</button>
+                </p>
+                
+                <?php if (empty($all_orders)): ?>
+                    <p>Заказы не найдены.</p>
+                <?php else: ?>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;"><input type="checkbox" id="select-all-checkbox" onclick="toggleAllOrders(this)"></th>
+                                <th>№ заказа</th>
+                                <th>Дата</th>
+                                <th>Клиент</th>
+                                <th>Статус</th>
+                                <th>Способ получения</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($all_orders as $order): 
+                                $is_selected = in_array($order->get_id(), $selected_orders);
+                                $customer_name = $order->get_billing_first_name() . ' ' . $order->get_billing_last_name();
+                                if (trim($customer_name) === '') {
+                                    $customer_name = $order->get_billing_company() ?: 'Гость';
+                                }
+                                $shipping_method = $order->get_shipping_method();
+                                $is_pickup = (stripos($shipping_method, 'самовывоз') !== false || stripos($shipping_method, 'pickup') !== false);
+                            ?>
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" 
+                                               name="order_ids[]" 
+                                               value="<?php echo esc_attr($order->get_id()); ?>"
+                                               <?php echo $is_selected ? 'checked' : ''; ?>>
+                                    </td>
+                                    <td><strong>#<?php echo esc_html($order->get_id()); ?></strong></td>
+                                    <td><?php echo esc_html($order->get_date_created()->date_i18n('d.m.Y H:i')); ?></td>
+                                    <td><?php echo esc_html($customer_name); ?></td>
+                                    <td><?php echo esc_html(wc_get_order_status_name($order->get_status())); ?></td>
+                                    <td><?php echo $is_pickup ? '<strong>Самовывоз</strong>' : 'Доставка'; ?></td>
+                                    <td><?php echo $order->get_formatted_order_total(); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    
+                    <p class="submit" style="margin-top: 20px;">
+                        <input type="submit" name="generate_breakdown" class="button button-primary button-large" value="Сформировать сводку">
+                    </p>
+                <?php endif; ?>
+            </div>
+        </form>
+        
+        <?php if ($breakdown_data): ?>
+            <div class="postbox" style="margin-top: 20px; padding: 20px;">
+                <h2>Сводная таблица</h2>
+                <?php gustolocal_display_breakdown_table($breakdown_data); ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <script>
+    function toggleAllOrders(checkbox) {
+        var checkboxes = document.querySelectorAll('input[name="order_ids[]"]');
+        checkboxes.forEach(function(cb) {
+            cb.checked = checkbox.checked;
+        });
+    }
+    
+    function selectAllOrders() {
+        var checkboxes = document.querySelectorAll('input[name="order_ids[]"]');
+        checkboxes.forEach(function(cb) {
+            cb.checked = true;
+        });
+        document.getElementById('select-all-checkbox').checked = true;
+    }
+    
+    function deselectAllOrders() {
+        var checkboxes = document.querySelectorAll('input[name="order_ids[]"]');
+        checkboxes.forEach(function(cb) {
+            cb.checked = false;
+        });
+        document.getElementById('select-all-checkbox').checked = false;
+    }
+    </script>
+    <?php
+}
+
+// Функция для генерации сводки
+function gustolocal_generate_breakdown($order_ids) {
+    $dishes_by_category = array(); // [category][dish_key] = dish_data
+    $customers = array(); // [order_id] = customer_data
+    $total_sum = 0;
+    $total_portions = 0;
+    
+    foreach ($order_ids as $order_id) {
+        $order = wc_get_order($order_id);
+        if (!$order) continue;
+        
+        // Информация о клиенте
+        $customer_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+        if ($customer_name === '') {
+            $customer_name = $order->get_billing_company() ?: 'Гость';
+        }
+        
+        $shipping_method = $order->get_shipping_method();
+        $is_pickup = (stripos($shipping_method, 'самовывоз') !== false || stripos($shipping_method, 'pickup') !== false);
+        
+        $customers[$order_id] = array(
+            'name' => $customer_name,
+            'order_id' => $order_id,
+            'is_pickup' => $is_pickup,
+            'total' => $order->get_total(),
+        );
+        
+        $total_sum += $order->get_total();
+        
+        // Извлекаем блюда из заказа
+        $order_dishes = gustolocal_extract_dishes_from_order($order);
+        
+        foreach ($order_dishes as $dish_key => $dish_data) {
+            $category = $dish_data['category'];
+            
+            if (!isset($dishes_by_category[$category])) {
+                $dishes_by_category[$category] = array();
+            }
+            
+            if (!isset($dishes_by_category[$category][$dish_key])) {
+                $dishes_by_category[$category][$dish_key] = array(
+                    'name' => $dish_data['name'],
+                    'unit' => $dish_data['unit'],
+                    'category' => $category,
+                    'category_order' => $dish_data['category_order'],
+                    'quantities' => array(), // [order_id] => qty
+                );
+            }
+            
+            $dishes_by_category[$category][$dish_key]['quantities'][$order_id] = $dish_data['total_qty'];
+            $total_portions += $dish_data['total_qty'];
+        }
+    }
+    
+    // Сортируем категории по порядку
+    uasort($dishes_by_category, function($a, $b) {
+        $order_a = !empty($a) ? reset($a)['category_order'] : 999;
+        $order_b = !empty($b) ? reset($b)['category_order'] : 999;
+        return $order_a - $order_b;
+    });
+    
+    return array(
+        'dishes_by_category' => $dishes_by_category,
+        'customers' => $customers,
+        'total_sum' => $total_sum,
+        'total_portions' => $total_portions,
+        'order_ids' => $order_ids,
+    );
+}
+
+// Функция для умножения всех чисел в строке на множитель
+function gustolocal_multiply_numbers_in_string($unit, $multiplier) {
+    if (empty($unit) || $multiplier <= 0) {
+        return $unit;
+    }
+    
+    // Заменяем все числа на умноженные значения
+    $result = preg_replace_callback(
+        '/\d+(?:[.,]\d+)?/',
+        function($matches) use ($multiplier) {
+            $number = floatval(str_replace(',', '.', $matches[0]));
+            $multiplied = $number * $multiplier;
+            // Если было целое число, возвращаем целое, иначе с десятичными
+            if (strpos($matches[0], '.') === false && strpos($matches[0], ',') === false) {
+                return (string)intval($multiplied);
+            }
+            return number_format($multiplied, 2, '.', '');
+        },
+        $unit
+    );
+    
+    return $result;
+}
+
+// Функция для вычисления итогового веса блюда
+function gustolocal_calculate_dish_weight($dish_data, $quantities) {
+    if (empty($dish_data['unit'])) {
+        return array('total' => null, 'display' => '');
+    }
+    
+    $total_qty = array_sum($quantities);
+    
+    if ($total_qty <= 0) {
+        return array('total' => null, 'display' => '');
+    }
+    
+    // Проверяем, является ли формат сложным (содержит "/" или скобки с числами)
+    $has_slashes = (strpos($dish_data['unit'], '/') !== false);
+    $has_brackets_with_numbers = preg_match('/\([^)]*\d+[^)]*\)/', $dish_data['unit']);
+    
+    // Если это сложный формат - умножаем все числа
+    if ($has_slashes || $has_brackets_with_numbers) {
+        // Сложные случаи: умножаем все числа в строке
+        // "250/ 400/ 60 (2 пор)" -> "750/ 1200/ 180 (6 пор)"
+        // "200 г (8 шт)" -> "400 г (16 шт)"
+        $multiplied_unit = gustolocal_multiply_numbers_in_string($dish_data['unit'], $total_qty);
+        
+        // Для расчета общего веса в сложных случаях берем первое число
+        preg_match('/^(\d+(?:[.,]\d+)?)/', $dish_data['unit'], $first_num_match);
+        $total_weight = null;
+        if (!empty($first_num_match)) {
+            $first_value = floatval(str_replace(',', '.', $first_num_match[1]));
+            $total_weight = $first_value * $total_qty;
+        }
+        
+        return array(
+            'total' => $total_weight,
+            'display' => $multiplied_unit
+        );
+    }
+    
+    // Простые случаи: "200 г", "1200 мл" - просто умножаем число
+    if (preg_match('/^(\d+(?:[.,]\d+)?)\s*(г|мл|кг|л|шт|пор)/ui', $dish_data['unit'], $matches)) {
+        $value = floatval(str_replace(',', '.', $matches[1]));
+        $unit_type = $matches[2];
+        $total_weight = $value * $total_qty;
+        return array(
+            'total' => $total_weight,
+            'display' => number_format($total_weight, 0, ',', ' ') . ' ' . $unit_type
+        );
+    }
+    
+    // Если ничего не подошло
+    return array('total' => null, 'display' => '');
+}
+
+// Функция для отображения сводной таблицы
+function gustolocal_display_breakdown_table($data) {
+    $dishes_by_category = $data['dishes_by_category'];
+    $customers = $data['customers'];
+    $total_sum = $data['total_sum'];
+    $total_portions = $data['total_portions'];
+    $order_ids = $data['order_ids'];
+    
+    // Собираем все уникальные блюда
+    $all_dishes = array();
+    foreach ($dishes_by_category as $category => $dishes) {
+        foreach ($dishes as $dish_key => $dish_data) {
+            $all_dishes[$dish_key] = $dish_data;
+        }
+    }
+    
+    // Пересчитываем суммы из заказов для проверки
+    $recalculated_sum = 0;
+    $recalculated_portions = 0;
+    foreach ($order_ids as $order_id) {
+        $order = wc_get_order($order_id);
+        if ($order) {
+            $recalculated_sum += $order->get_total();
+            $order_dishes = gustolocal_extract_dishes_from_order($order);
+            foreach ($order_dishes as $dish_data) {
+                $recalculated_portions += $dish_data['total_qty'];
+            }
+        }
+    }
+    
+    ?>
+    <style>
+    .breakdown-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 13px;
+    }
+    .breakdown-table th,
+    .breakdown-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    .breakdown-table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .breakdown-table .category-header {
+        background-color: #e8f4f8;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    .breakdown-table .dish-row {
+        background-color: #fff;
+    }
+    .breakdown-table .total-row {
+        background-color: #fff3cd;
+        font-weight: bold;
+    }
+    .breakdown-table .customer-col {
+        min-width: 150px;
+        text-align: center;
+    }
+    .breakdown-table .dish-col {
+        min-width: 200px;
+    }
+    .breakdown-table .qty-cell {
+        text-align: center;
+        font-weight: bold;
+    }
+    .breakdown-table .pickup-badge {
+        display: inline-block;
+        background-color: #d1ecf1;
+        color: #0c5460;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        margin-left: 5px;
+    }
+    .breakdown-verification {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f0f0f0;
+        border-left: 4px solid #0073aa;
+    }
+    .breakdown-verification.ok {
+        border-left-color: #46b450;
+    }
+    .breakdown-verification.error {
+        border-left-color: #dc3232;
+    }
+    </style>
+    
+    <div class="breakdown-verification <?php echo ($recalculated_sum == $total_sum && $recalculated_portions == $total_portions) ? 'ok' : 'error'; ?>">
+        <h3>Проверка данных</h3>
+        <p><strong>Сумма заказов:</strong> <?php echo wc_price($total_sum); ?> 
+        <?php if ($recalculated_sum != $total_sum): ?>
+            <span style="color: #dc3232;">(Ожидалось: <?php echo wc_price($recalculated_sum); ?>)</span>
+        <?php else: ?>
+            <span style="color: #46b450;">✓</span>
+        <?php endif; ?>
+        </p>
+        <p><strong>Общее количество порций:</strong> <?php echo number_format($total_portions, 0, ',', ' '); ?> 
+        <?php if ($recalculated_portions != $total_portions): ?>
+            <span style="color: #dc3232;">(Ожидалось: <?php echo number_format($recalculated_portions, 0, ',', ' '); ?>)</span>
+        <?php else: ?>
+            <span style="color: #46b450;">✓</span>
+        <?php endif; ?>
+        </p>
+    </div>
+    
+    <div style="overflow-x: auto; max-width: 100%;">
+        <table class="breakdown-table">
+            <thead>
+                <tr>
+                    <th class="dish-col">Блюдо</th>
+                    <th class="total-row">ИТОГО</th>
+                    <th class="total-row">Итоговый вес</th>
+                    <?php foreach ($customers as $order_id => $customer): ?>
+                        <th class="customer-col">
+                            <?php echo esc_html($customer['name']); ?><br>
+                            <small>#<?php echo esc_html($order_id); ?></small>
+                            <?php if ($customer['is_pickup']): ?>
+                                <span class="pickup-badge">Самовывоз</span>
+                            <?php else: ?>
+                                <span style="font-size: 11px; color: #666;">Доставка</span>
+                            <?php endif; ?>
+                        </th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php 
+                $current_category = '';
+                foreach ($dishes_by_category as $category => $dishes): 
+                    if ($current_category !== $category):
+                        $current_category = $category;
+                ?>
+                    <tr class="category-header">
+                        <td colspan="<?php echo count($customers) + 3; ?>">
+                            <strong><?php echo esc_html($category); ?></strong>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+                
+                <?php foreach ($dishes as $dish_key => $dish_data): 
+                    $dish_total = array_sum($dish_data['quantities']);
+                    $weight_info = gustolocal_calculate_dish_weight($dish_data, $dish_data['quantities']);
+                ?>
+                    <tr class="dish-row">
+                        <td class="dish-col">
+                            <?php echo esc_html($dish_data['name']); ?>
+                            <?php if ($dish_data['unit']): ?>
+                                <small style="color: #666;">(<?php echo esc_html($dish_data['unit']); ?>)</small>
+                            <?php endif; ?>
+                        </td>
+                        <td class="qty-cell total-row"><?php echo $dish_total; ?></td>
+                        <td class="qty-cell total-row" style="text-align: left;">
+                            <?php if ($weight_info['display']): ?>
+                                <?php echo esc_html($weight_info['display']); ?>
+                            <?php else: ?>
+                                <span style="color: #999;">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <?php foreach ($customers as $order_id => $customer): 
+                            $qty = isset($dish_data['quantities'][$order_id]) ? $dish_data['quantities'][$order_id] : 0;
+                        ?>
+                            <td class="qty-cell"><?php echo $qty > 0 ? $qty : ''; ?></td>
+                        <?php endforeach; ?>
+                    </tr>
+                <?php endforeach; ?>
+                <?php endforeach; ?>
+                
+                <tr class="total-row">
+                    <td><strong>ИТОГО</strong></td>
+                    <td class="qty-cell"><strong><?php echo number_format($total_portions, 0, ',', ' '); ?></strong></td>
+                    <td></td>
+                    <?php 
+                    // Подсчитываем общее количество порций для каждого клиента
+                    $customer_totals = array();
+                    foreach ($dishes_by_category as $category => $dishes) {
+                        foreach ($dishes as $dish_data) {
+                            foreach ($dish_data['quantities'] as $order_id => $qty) {
+                                if (!isset($customer_totals[$order_id])) {
+                                    $customer_totals[$order_id] = 0;
+                                }
+                                $customer_totals[$order_id] += $qty;
+                            }
+                        }
+                    }
+                    foreach ($customers as $order_id => $customer): 
+                        $customer_total = isset($customer_totals[$order_id]) ? $customer_totals[$order_id] : 0;
+                    ?>
+                        <td class="qty-cell"><strong><?php echo $customer_total > 0 ? number_format($customer_total, 0, ',', ' ') : ''; ?></strong></td>
+                    <?php endforeach; ?>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <?php
+}
+
+/* ========================================
+   СИСТЕМА ОБРАТНОЙ СВЯЗИ О БЛЮДАХ
+   ======================================== */
+
+// Создание таблицы для хранения отзывов при активации темы
+add_action('after_switch_theme', 'gustolocal_create_feedback_table');
+add_action('admin_init', 'gustolocal_create_feedback_table'); // Также при загрузке админки
+function gustolocal_create_feedback_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    
+    $charset_collate = $wpdb->get_charset_collate();
+    
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        token varchar(64) NOT NULL,
+        order_id bigint(20) UNSIGNED NOT NULL,
+        customer_name varchar(255) DEFAULT '',
+        dish_name varchar(255) NOT NULL,
+        dish_unit varchar(100) DEFAULT '',
+        rating int(1) NOT NULL COMMENT '1=😞, 2=😐, 3=😊, 4=😍',
+        comment text DEFAULT '',
+        general_comment text DEFAULT '',
+        shared_instagram tinyint(1) DEFAULT 0,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY token (token),
+        KEY order_id (order_id),
+        KEY dish_name (dish_name)
+    ) $charset_collate;";
+    
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+}
+
+// Регистрация страницы управления опросами
+add_action('admin_menu', 'gustolocal_add_feedback_management_page');
+function gustolocal_add_feedback_management_page() {
+    add_submenu_page(
+        'woocommerce',
+        'Обратная связь',
+        'Обратная связь',
+        'manage_options',
+        'gustolocal-feedback',
+        'gustolocal_feedback_management_page'
+    );
+    
+    add_submenu_page(
+        'woocommerce',
+        'Результаты отзывов',
+        'Результаты отзывов',
+        'manage_options',
+        'gustolocal-feedback-results',
+        'gustolocal_feedback_results_page'
+    );
+}
+
+// Функция для определения клиентов для опроса
+function gustolocal_get_customers_for_feedback($date_from = null, $date_to = null, $status_filter = '') {
+    if (!function_exists('wc_get_orders')) {
+        return array();
+    }
+    
+    $orders_query = array(
+        'limit' => 500,
+        'orderby' => 'date',
+        'order' => 'DESC',
+    );
+    
+    // Если даты не указаны, используем вторник неделю назад по умолчанию
+    if (!$date_from || !$date_to) {
+        $last_tuesday = strtotime('last tuesday');
+        $date_from = date('Y-m-d 00:00:00', $last_tuesday);
+        $date_to = date('Y-m-d 23:59:59', $last_tuesday);
+    }
+    
+    $orders_query['date_created'] = $date_from . '...' . $date_to;
+    
+    if ($status_filter) {
+        $orders_query['status'] = $status_filter;
+    } else {
+        $orders_query['status'] = array('processing', 'completed', 'on-hold');
+    }
+    
+    $orders = wc_get_orders($orders_query);
+    
+    $customers_data = array();
+    
+    foreach ($orders as $order) {
+        $order_id = $order->get_id();
+        
+        // Проверяем, есть ли уже токен для этого заказа
+        $token = $order->get_meta('_feedback_token', true);
+        
+        if (!$token) {
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'dish_feedback';
+            $existing_token = $wpdb->get_var($wpdb->prepare(
+                "SELECT token FROM $table_name WHERE order_id = %d LIMIT 1",
+                $order_id
+            ));
+            
+            if ($existing_token) {
+                $token = $existing_token;
+            } else {
+                // Генерируем новый токен
+                $token = wp_generate_password(32, false);
+            }
+            
+            // Сохраняем токен в мета заказа
+            $order->update_meta_data('_feedback_token', $token);
+            $order->save();
+        }
+        
+        // Извлекаем блюда из заказа
+        $dishes = gustolocal_extract_dishes_from_order($order);
+        
+        if (empty($dishes)) {
+            continue;
+        }
+        
+        $customer_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+        if ($customer_name === '') {
+            $customer_name = $order->get_billing_company() ?: 'Гость';
+        }
+        
+        $phone = $order->get_billing_phone();
+        $whatsapp_link = $phone ? 'https://wa.me/' . preg_replace('/[^0-9]/', '', $phone) : '';
+        
+        $customers_data[] = array(
+            'order_id' => $order_id,
+            'customer_name' => $customer_name,
+            'phone' => $phone,
+            'whatsapp_link' => $whatsapp_link,
+            'token' => $token,
+            'dishes_count' => count($dishes),
+            'order_date' => $order->get_date_created()->date_i18n('d.m.Y H:i'),
+        );
+    }
+    
+    return $customers_data;
+}
+
+// Страница управления опросами
+function gustolocal_feedback_management_page() {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    // Получаем параметры фильтрации
+    $date_from = isset($_POST['date_from']) ? sanitize_text_field($_POST['date_from']) : '';
+    $date_to = isset($_POST['date_to']) ? sanitize_text_field($_POST['date_to']) : '';
+    $status_filter = isset($_POST['status']) ? sanitize_text_field($_POST['status']) : '';
+    
+    // Если фильтры не заданы, используем вторник неделю назад по умолчанию
+    if (empty($date_from) || empty($date_to)) {
+        $last_tuesday = strtotime('last tuesday');
+        $date_from = date('Y-m-d', $last_tuesday);
+        $date_to = date('Y-m-d', $last_tuesday);
+    }
+    
+    $customers = gustolocal_get_customers_for_feedback(
+        $date_from ? $date_from . ' 00:00:00' : null,
+        $date_to ? $date_to . ' 23:59:59' : null,
+        $status_filter
+    );
+    $site_url = home_url();
+    
+    ?>
+    <div class="wrap">
+        <h1>Обратная связь о блюдах</h1>
+        <p>Выберите заказы и отправьте клиентам ссылку на опросник через WhatsApp или Telegram.</p>
+        
+        <form method="post" action="" style="margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 5px;">
+            <table class="form-table">
+                <tr>
+                    <th><label for="date_from">Дата от:</label></th>
+                    <td><input type="date" id="date_from" name="date_from" value="<?php echo esc_attr($date_from); ?>" class="regular-text"></td>
+                </tr>
+                <tr>
+                    <th><label for="date_to">Дата до:</label></th>
+                    <td><input type="date" id="date_to" name="date_to" value="<?php echo esc_attr($date_to); ?>" class="regular-text"></td>
+                </tr>
+                <tr>
+                    <th><label for="status">Статус:</label></th>
+                    <td>
+                        <select id="status" name="status" class="regular-text">
+                            <option value="">Все статусы</option>
+                            <?php
+                            $statuses = wc_get_order_statuses();
+                            foreach ($statuses as $status_key => $status_label) {
+                                $selected = ($status_filter === $status_key) ? 'selected' : '';
+                                echo '<option value="' . esc_attr($status_key) . '" ' . $selected . '>' . esc_html($status_label) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </td>
+                </tr>
+            </table>
+            <p class="submit">
+                <input type="submit" class="button button-primary" value="Применить фильтры">
+                <button type="button" class="button" onclick="document.getElementById('date_from').value=''; document.getElementById('date_to').value=''; document.getElementById('status').value=''; this.form.submit();">
+                    Показать все заказы
+                </button>
+            </p>
+        </form>
+        
+        <?php if (empty($customers)): ?>
+            <div class="notice notice-info">
+                <p>Нет заказов для выбранного периода.</p>
+            </div>
+        <?php else: ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">№ заказа</th>
+                        <th>Клиент</th>
+                        <th>Телефон</th>
+                        <th>Дата заказа</th>
+                        <th>Блюд</th>
+                        <th style="width: 300px;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($customers as $customer): 
+                        $feedback_url = $site_url . '/feedback/' . $customer['token'];
+                    ?>
+                        <tr>
+                            <td><strong>#<?php echo esc_html($customer['order_id']); ?></strong></td>
+                            <td><?php echo esc_html($customer['customer_name']); ?></td>
+                            <td><?php echo esc_html($customer['phone']); ?></td>
+                            <td><?php echo esc_html($customer['order_date']); ?></td>
+                            <td><?php echo esc_html($customer['dishes_count']); ?></td>
+                            <td>
+                                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                    <input type="text" 
+                                           id="feedback-link-<?php echo esc_attr($customer['order_id']); ?>" 
+                                           value="<?php echo esc_attr($feedback_url); ?>" 
+                                           readonly 
+                                           style="flex: 1; min-width: 200px; font-size: 11px;">
+                                    <button type="button" 
+                                            class="button button-small copy-link-btn" 
+                                            data-target="feedback-link-<?php echo esc_attr($customer['order_id']); ?>">
+                                        Копировать
+                                    </button>
+                                    <?php if ($customer['whatsapp_link']): ?>
+                                        <a href="<?php echo esc_url($customer['whatsapp_link']); ?>" 
+                                           target="_blank" 
+                                           class="button button-small">
+                                            WhatsApp
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.copy-link-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var targetId = this.getAttribute('data-target');
+                var input = document.getElementById(targetId);
+                input.select();
+                input.setSelectionRange(0, 99999); // Для мобильных
+                document.execCommand('copy');
+                
+                var originalText = this.textContent;
+                this.textContent = 'Скопировано!';
+                this.classList.add('button-primary');
+                
+                setTimeout(function() {
+                    this.textContent = originalText;
+                    this.classList.remove('button-primary');
+                }.bind(this), 2000);
+            });
+        });
+    });
+    </script>
+    <?php
+}
+
+// Страница просмотра результатов отзывов
+function gustolocal_feedback_results_page() {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    
+    // Получаем статистику по блюдам
+    $dish_stats = $wpdb->get_results("
+        SELECT 
+            dish_name,
+            dish_unit,
+            COUNT(*) as total_reviews,
+            AVG(rating) as avg_rating,
+            SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as rating_4,
+            SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as rating_3,
+            SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as rating_2,
+            SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as rating_1
+        FROM $table_name
+        GROUP BY dish_name, dish_unit
+        ORDER BY avg_rating DESC, total_reviews DESC
+    ", ARRAY_A);
+    
+    // Получаем последние отзывы с комментариями
+    $recent_feedback = $wpdb->get_results("
+        SELECT 
+            f.*,
+            o.post_date as order_date
+        FROM $table_name f
+        LEFT JOIN {$wpdb->posts} o ON f.order_id = o.ID
+        WHERE f.general_comment != '' OR f.shared_instagram = 1
+        ORDER BY f.created_at DESC
+        LIMIT 50
+    ", ARRAY_A);
+    
+    ?>
+    <div class="wrap">
+        <h1>Результаты отзывов о блюдах</h1>
+        
+        <h2>Статистика по блюдам</h2>
+        <p class="description">Таблица автоматически группирует отзывы по названию блюда и единице измерения. Кликните на строку, чтобы увидеть все отзывы по этому блюду.</p>
+        
+        <table class="wp-list-table widefat fixed striped" id="feedback-stats-table">
+            <thead>
+                <tr>
+                    <th>Блюдо</th>
+                    <th>Отзывов</th>
+                    <th>Средняя оценка</th>
+                    <th>😍</th>
+                    <th>😊</th>
+                    <th>😐</th>
+                    <th>😞</th>
+                    <th style="width: 100px;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($dish_stats as $stat): 
+                    $avg = round($stat['avg_rating'], 2);
+                    $dish_full = $stat['dish_name'] . ($stat['dish_unit'] ? ' (' . $stat['dish_unit'] . ')' : '');
+                    $dish_key = esc_attr($stat['dish_name'] . '|' . $stat['dish_unit']);
+                ?>
+                    <tr data-dish-name="<?php echo esc_attr($stat['dish_name']); ?>" data-dish-unit="<?php echo esc_attr($stat['dish_unit']); ?>">
+                        <td><strong><?php echo esc_html($dish_full); ?></strong></td>
+                        <td><?php echo esc_html($stat['total_reviews']); ?></td>
+                        <td>
+                            <strong><?php echo number_format($avg, 2); ?></strong>
+                            <span style="font-size: 20px;">
+                                <?php 
+                                if ($avg >= 3.5) echo '😍';
+                                elseif ($avg >= 2.5) echo '😊';
+                                elseif ($avg >= 1.5) echo '😐';
+                                else echo '😞';
+                                ?>
+                            </span>
+                        </td>
+                        <td><?php echo esc_html($stat['rating_4']); ?></td>
+                        <td><?php echo esc_html($stat['rating_3']); ?></td>
+                        <td><?php echo esc_html($stat['rating_2']); ?></td>
+                        <td><?php echo esc_html($stat['rating_1']); ?></td>
+                        <td>
+                            <button type="button" class="button button-small view-details-btn" 
+                                    data-dish-name="<?php echo esc_attr($stat['dish_name']); ?>" 
+                                    data-dish-unit="<?php echo esc_attr($stat['dish_unit']); ?>">
+                                Детали
+                            </button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        
+        <style>
+        .feedback-modal {
+            display: none;
+            position: fixed;
+            z-index: 100000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .feedback-modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .feedback-modal-close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .feedback-modal-close:hover {
+            color: #000;
+        }
+        .feedback-detail-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #0073aa;
+            border-radius: 4px;
+        }
+        .feedback-detail-item .rating {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        </style>
+        
+        <div id="feedback-modal" class="feedback-modal">
+            <div class="feedback-modal-content">
+                <span class="feedback-modal-close">&times;</span>
+                <h2 id="modal-dish-name"></h2>
+                <div id="modal-feedback-list"></div>
+            </div>
+        </div>
+        
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var modal = document.getElementById('feedback-modal');
+            var closeBtn = document.querySelector('.feedback-modal-close');
+            var viewDetailsBtns = document.querySelectorAll('.view-details-btn');
+            
+            viewDetailsBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var dishName = this.getAttribute('data-dish-name');
+                    var dishUnit = this.getAttribute('data-dish-unit');
+                    showFeedbackDetails(dishName, dishUnit);
+                });
+            });
+            
+            closeBtn.onclick = function() {
+                modal.style.display = 'none';
+            };
+            
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = 'none';
+                }
+            };
+            
+            function showFeedbackDetails(dishName, dishUnit) {
+                document.getElementById('modal-dish-name').textContent = dishName + (dishUnit ? ' (' + dishUnit + ')' : '');
+                document.getElementById('modal-feedback-list').innerHTML = '<p>Загрузка...</p>';
+                modal.style.display = 'block';
+                
+                // AJAX запрос для получения детальных отзывов
+                var formData = new FormData();
+                formData.append('action', 'get_feedback_details');
+                formData.append('dish_name', dishName);
+                formData.append('dish_unit', dishUnit);
+                
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (data.success) {
+                        var html = '';
+                        if (data.data.length === 0) {
+                            html = '<p>Нет детальных отзывов для этого блюда.</p>';
+                        } else {
+                            data.data.forEach(function(feedback) {
+                                var ratingEmoji = {'1': '😞', '2': '😐', '3': '😊', '4': '😍'};
+                                html += '<div class="feedback-detail-item">';
+                                html += '<div style="display: flex; align-items: center; margin-bottom: 10px;">';
+                                html += '<span class="rating">' + ratingEmoji[feedback.rating] + '</span>';
+                                html += '<strong>' + feedback.customer_name + '</strong>';
+                                html += '<span style="margin-left: auto; color: #666; font-size: 12px;">Заказ #' + feedback.order_id + ' • ' + feedback.date + '</span>';
+                                html += '</div>';
+                                if (feedback.general_comment) {
+                                    html += '<p style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px;">' + escapeHtml(feedback.general_comment) + '</p>';
+                                }
+                                html += '</div>';
+                            });
+                        }
+                        document.getElementById('modal-feedback-list').innerHTML = html;
+                    } else {
+                        document.getElementById('modal-feedback-list').innerHTML = '<p>Ошибка: ' + (data.data || 'Не удалось загрузить отзывы') + '</p>';
+                    }
+                })
+                .catch(function(error) {
+                    document.getElementById('modal-feedback-list').innerHTML = '<p>Ошибка: ' + error + '</p>';
+                });
+            }
+            
+            function escapeHtml(text) {
+                var div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        });
+        </script>
+        
+        <h2>Последние комментарии и активности</h2>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Клиент</th>
+                    <th>Заказ</th>
+                    <th>Комментарий</th>
+                    <th>Поделились в Instagram</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($recent_feedback as $feedback): ?>
+                    <tr>
+                        <td><?php echo esc_html(date('d.m.Y H:i', strtotime($feedback['created_at']))); ?></td>
+                        <td><?php echo esc_html($feedback['customer_name']); ?></td>
+                        <td>#<?php echo esc_html($feedback['order_id']); ?></td>
+                        <td><?php echo esc_html($feedback['general_comment']); ?></td>
+                        <td><?php echo $feedback['shared_instagram'] ? '✅ Да' : '—'; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (empty($recent_feedback)): ?>
+                    <tr>
+                        <td colspan="5">Нет комментариев</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        
+        <h2>Экспорт данных</h2>
+        <p>
+            <a href="<?php echo admin_url('admin-post.php?action=export_feedback'); ?>" class="button button-primary">
+                Экспортировать в CSV
+            </a>
+        </p>
+    </div>
+    <?php
+}
+
+// Экспорт отзывов в CSV
+add_action('admin_post_export_feedback', 'gustolocal_export_feedback_csv');
+function gustolocal_export_feedback_csv() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Доступ запрещен');
+    }
+    
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    
+    $results = $wpdb->get_results("
+        SELECT 
+            dish_name,
+            dish_unit,
+            customer_name,
+            order_id,
+            rating,
+            general_comment,
+            shared_instagram,
+            created_at
+        FROM $table_name
+        ORDER BY created_at DESC
+    ", ARRAY_A);
+    
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=feedback_' . date('Y-m-d') . '.csv');
+    
+    $output = fopen('php://output', 'w');
+    
+    // BOM для правильного отображения кириллицы в Excel
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+    
+    // Заголовки
+    fputcsv($output, array('Блюдо', 'Единица', 'Клиент', 'Заказ', 'Оценка', 'Комментарий', 'Поделились Instagram', 'Дата'), ';');
+    
+    // Данные
+    foreach ($results as $row) {
+        $rating_emoji = array(1 => '😞', 2 => '😐', 3 => '😊', 4 => '😍');
+        fputcsv($output, array(
+            $row['dish_name'],
+            $row['dish_unit'],
+            $row['customer_name'],
+            $row['order_id'],
+            $rating_emoji[$row['rating']] ?? $row['rating'],
+            $row['general_comment'],
+            $row['shared_instagram'] ? 'Да' : 'Нет',
+            $row['created_at']
+        ), ';');
+    }
+    
+    fclose($output);
+    exit;
+}
+
+// Регистрация кастомного эндпоинта для опросника
+add_action('init', 'gustolocal_register_feedback_endpoint');
+function gustolocal_register_feedback_endpoint() {
+    add_rewrite_rule('^feedback/([^/]+)/?$', 'index.php?feedback_token=$matches[1]', 'top');
+    add_rewrite_tag('%feedback_token%', '([^&]+)');
+}
+
+// Перезапись правил при активации
+add_action('after_switch_theme', 'gustolocal_flush_rewrite_rules');
+function gustolocal_flush_rewrite_rules() {
+    gustolocal_register_feedback_endpoint();
+    flush_rewrite_rules();
+}
+
+// Обработка запроса опросника
+add_action('template_redirect', 'gustolocal_handle_feedback_page');
+function gustolocal_handle_feedback_page() {
+    $token = get_query_var('feedback_token');
+    
+    if (!$token) {
+        return;
+    }
+    
+    $order_id = null;
+    
+    // Сначала проверяем в мета заказа
+    $orders = wc_get_orders(array(
+        'limit' => 100,
+        'meta_key' => '_feedback_token',
+        'meta_value' => $token,
+    ));
+    
+    if (!empty($orders)) {
+        $order_id = $orders[0]->get_id();
+    }
+    
+    // Если не нашли, проверяем в БД
+    if (!$order_id) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dish_feedback';
+        $order_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT order_id FROM $table_name WHERE token = %s LIMIT 1",
+            $token
+        ));
+    }
+    
+    if (!$order_id) {
+        wp_die('Неверная ссылка на опросник.', 'Ошибка', array('response' => 404));
+    }
+    
+    // Показываем опросник
+    gustolocal_display_feedback_form($token, $order_id);
+    exit;
+}
+
+// Отображение формы опросника
+function gustolocal_display_feedback_form($token, $order_id) {
+    $order = wc_get_order($order_id);
+    if (!$order) {
+        wp_die('Заказ не найден.', 'Ошибка', array('response' => 404));
+    }
+    
+    $dishes = gustolocal_extract_dishes_from_order($order);
+    
+    if (empty($dishes)) {
+        wp_die('Блюда не найдены в заказе.', 'Ошибка', array('response' => 404));
+    }
+    
+    $customer_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+    if ($customer_name === '') {
+        $customer_name = $order->get_billing_company() ?: 'Дорогой клиент';
+    }
+    
+    // Проверяем, не заполнен ли уже опрос
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    $already_submitted = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $table_name WHERE token = %s",
+        $token
+    ));
+    
+    ?>
+    <!DOCTYPE html>
+    <html <?php language_attributes(); ?>>
+    <head>
+        <meta charset="<?php bloginfo('charset'); ?>">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Оцените наши блюда</title>
+        <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .feedback-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 30px;
+            margin: 20px auto;
+        }
+        .feedback-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .feedback-header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .feedback-header p {
+            color: #666;
+            font-size: 16px;
+        }
+        .dish-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .dish-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .rating-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .rating-btn {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 32px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .rating-btn:hover {
+            transform: scale(1.1);
+            border-color: #667eea;
+        }
+        .rating-btn.selected {
+            border-color: #667eea;
+            background: #667eea;
+            transform: scale(1.1);
+        }
+        .rating-label {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        .general-comment {
+            margin-top: 30px;
+        }
+        .general-comment label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .general-comment textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .share-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0f4ff;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .share-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .share-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 5px;
+            transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .share-button:hover {
+            transform: scale(1.05);
+        }
+        .share-button:active {
+            transform: scale(0.98);
+        }
+        .share-icon {
+            font-size: 18px;
+        }
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .success-message {
+            text-align: center;
+            padding: 40px;
+            color: #46b450;
+        }
+        .success-message h2 {
+            font-size: 32px;
+            margin-bottom: 15px;
+        }
+        @media (max-width: 600px) {
+            .feedback-container {
+                padding: 20px;
+            }
+            .rating-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 28px;
+            }
+        }
+        </style>
+    </head>
+    <body>
+        <div class="feedback-container">
+            <?php if ($already_submitted > 0): ?>
+                <div class="success-message">
+                    <h2>✅ Спасибо!</h2>
+                    <p>Вы уже оставили отзыв. Мы ценим ваше мнение!</p>
+                </div>
+            <?php else: ?>
+                <form id="feedback-form">
+                    <input type="hidden" name="action" value="guest_feedback_submit">
+                    <input type="hidden" name="token" value="<?php echo esc_attr($token); ?>">
+                    <input type="hidden" name="order_id" value="<?php echo esc_attr($order_id); ?>">
+                    
+                    <?php foreach ($dishes as $dish_key => $dish_data): ?>
+                        <div class="dish-item" data-dish="<?php echo esc_attr($dish_key); ?>">
+                            <div class="dish-name">
+                                <?php echo esc_html($dish_data['name']); ?>
+                                <?php if ($dish_data['unit']): ?>
+                                    <small style="color: #666;">(<?php echo esc_html($dish_data['unit']); ?>)</small>
+                                <?php endif; ?>
+                            </div>
+                            <div class="rating-buttons">
+                                <button type="button" class="rating-btn" data-rating="1" data-dish="<?php echo esc_attr($dish_key); ?>">
+                                    😞
+                                </button>
+                                <button type="button" class="rating-btn" data-rating="2" data-dish="<?php echo esc_attr($dish_key); ?>">
+                                    😐
+                                </button>
+                                <button type="button" class="rating-btn" data-rating="3" data-dish="<?php echo esc_attr($dish_key); ?>">
+                                    😊
+                                </button>
+                                <button type="button" class="rating-btn" data-rating="4" data-dish="<?php echo esc_attr($dish_key); ?>">
+                                    😍
+                                </button>
+                            </div>
+                            <input type="hidden" name="ratings[<?php echo esc_attr($dish_key); ?>]" value="">
+                        </div>
+                    <?php endforeach; ?>
+                    
+                    <div class="general-comment">
+                        <label for="general-comment">Хотите что-то добавить?</label>
+                        <textarea id="general-comment" name="general_comment" placeholder="Ваши пожелания, замечания, предложения..."></textarea>
+                    </div>
+                    
+                    <div class="share-section">
+                        <h3>Понравилось? Расскажите друзьям! 👥</h3>
+                        <button type="button" class="share-button" id="share-btn" onclick="shareInstagram()">
+                            <span class="share-icon">↗️</span>
+                            <span>Поделиться нашим Instagram</span>
+                        </button>
+                    </div>
+                    
+                    <button type="submit" class="submit-btn" id="submit-btn">
+                        Отправить отзыв
+                    </button>
+                </form>
+            <?php endif; ?>
+        </div>
+        
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('feedback-form');
+            if (!form) return;
+            
+            // Обработка кликов по смайликам
+            document.querySelectorAll('.rating-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var dish = this.getAttribute('data-dish');
+                    var rating = this.getAttribute('data-rating');
+                    
+                    // Убираем выделение с других кнопок этого блюда
+                    document.querySelectorAll('.rating-btn[data-dish="' + dish + '"]').forEach(function(b) {
+                        b.classList.remove('selected');
+                    });
+                    
+                    // Выделяем выбранную кнопку
+                    this.classList.add('selected');
+                    
+                    // Сохраняем рейтинг в скрытое поле
+                    document.querySelector('input[name="ratings[' + dish + ']"]').value = rating;
+                    
+                    checkFormComplete();
+                });
+            });
+            
+            function checkFormComplete() {
+                var allRated = true;
+                document.querySelectorAll('.dish-item').forEach(function(item) {
+                    var dish = item.getAttribute('data-dish');
+                    var rating = document.querySelector('input[name="ratings[' + dish + ']"]').value;
+                    if (!rating) {
+                        allRated = false;
+                    }
+                });
+                
+                document.getElementById('submit-btn').disabled = !allRated;
+            }
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                var submitBtn = document.getElementById('submit-btn');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Отправка...';
+                
+                var formData = new FormData(form);
+                
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(response) {
+                    if (!response.ok) {
+                        return response.text().then(function(text) {
+                            throw new Error('HTTP ' + response.status + ': ' + text);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (data.success) {
+                        form.innerHTML = '<div class="success-message"><h2>✅ Спасибо!</h2><p>Ваш отзыв сохранен. Мы ценим ваше мнение!</p></div>';
+                    } else {
+                        var errorMsg = data.data || 'Не удалось сохранить отзыв';
+                        console.error('Ошибка сохранения:', data);
+                        alert('Ошибка: ' + errorMsg);
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Отправить отзыв';
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Ошибка запроса:', error);
+                    alert('Ошибка: ' + error.message);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Отправить отзыв';
+                });
+            });
+        });
+        
+        function shareInstagram() {
+            var instagramUrl = 'https://www.instagram.com/llevatelo_vlc/';
+            var shareText = 'Попробуйте вкусную еду от Llévatelo! 🍽️';
+            
+            // Проверяем поддержку Web Share API
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Llévatelo - Вкусная еда в Валенсии',
+                    text: shareText,
+                    url: instagramUrl
+                })
+                .then(function() {
+                    console.log('Успешно поделились');
+                    // Отмечаем, что поделились
+                    trackShare();
+                })
+                .catch(function(error) {
+                    console.log('Ошибка при попытке поделиться:', error);
+                    // Fallback: открываем Instagram в новой вкладке
+                    window.open(instagramUrl, '_blank');
+                });
+            } else {
+                // Fallback для браузеров без поддержки Web Share API
+                // Показываем диалог с ссылкой для копирования
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(instagramUrl).then(function() {
+                        alert('Ссылка на Instagram скопирована! Вставьте её в любое приложение.');
+                    }).catch(function() {
+                        // Если не удалось скопировать, просто открываем
+                        window.open(instagramUrl, '_blank');
+                    });
+                } else {
+                    // Последний fallback: открываем Instagram
+                    window.open(instagramUrl, '_blank');
+                }
+            }
+        }
+        
+        function trackShare() {
+            // Отмечаем, что пользователь поделился (можно отправить на сервер)
+            var shareBtn = document.getElementById('share-btn');
+            if (shareBtn) {
+                shareBtn.style.opacity = '0.7';
+                shareBtn.disabled = true;
+                shareBtn.innerHTML = '<span class="share-icon">✓</span><span>Поделились</span>';
+            }
+        }
+        </script>
+    </body>
+    </html>
+    <?php
+}
+
+// AJAX обработчик для сохранения отзывов
+add_action('wp_ajax_guest_feedback_submit', 'gustolocal_handle_feedback_submit');
+add_action('wp_ajax_nopriv_guest_feedback_submit', 'gustolocal_handle_feedback_submit');
+function gustolocal_handle_feedback_submit() {
+    // Проверяем action
+    $action = sanitize_text_field($_POST['action'] ?? '');
+    if (empty($action) || $action !== 'guest_feedback_submit') {
+        wp_send_json_error('Неверный запрос');
+    }
+    
+    $token = sanitize_text_field($_POST['token'] ?? '');
+    $order_id = intval($_POST['order_id'] ?? 0);
+    
+    // Правильно обрабатываем массив ratings из FormData
+    $ratings = array();
+    if (isset($_POST['ratings']) && is_array($_POST['ratings'])) {
+        $ratings = $_POST['ratings'];
+    } else {
+        // Пробуем получить из строки (если пришло как строка)
+        foreach ($_POST as $key => $value) {
+            if (strpos($key, 'ratings[') === 0) {
+                $dish_key = str_replace(array('ratings[', ']'), '', $key);
+                $ratings[$dish_key] = intval($value);
+            }
+        }
+    }
+    
+    $general_comment = sanitize_textarea_field($_POST['general_comment'] ?? '');
+    $shared_instagram = isset($_POST['shared_instagram']) ? 1 : 0;
+    
+    if (empty($token) || empty($order_id) || empty($ratings)) {
+        wp_send_json_error('Неверные данные: токен, заказ или оценки отсутствуют');
+    }
+    
+    $order = wc_get_order($order_id);
+    if (!$order) {
+        wp_send_json_error('Заказ не найден');
+    }
+    
+    $customer_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+    if ($customer_name === '') {
+        $customer_name = $order->get_billing_company() ?: 'Гость';
+    }
+    
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    
+    // Проверяем существование таблицы
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+        // Создаем таблицу, если её нет
+        gustolocal_create_feedback_table();
+    }
+    
+    $saved_count = 0;
+    $errors = array();
+    
+    // Сохраняем отзывы по каждому блюду
+    foreach ($ratings as $dish_key => $rating) {
+        $rating = intval($rating);
+        if ($rating < 1 || $rating > 4) continue;
+        
+        // Извлекаем название блюда и единицу из ключа
+        $dish_parts = explode(' (', $dish_key);
+        $dish_name = $dish_parts[0];
+        $dish_unit = isset($dish_parts[1]) ? rtrim($dish_parts[1], ')') : '';
+        
+        $result = $wpdb->insert(
+            $table_name,
+            array(
+                'token' => $token,
+                'order_id' => $order_id,
+                'customer_name' => $customer_name,
+                'dish_name' => $dish_name,
+                'dish_unit' => $dish_unit,
+                'rating' => $rating,
+                'general_comment' => '', // Общий комментарий сохраним отдельно
+                'shared_instagram' => 0,
+            ),
+            array('%s', '%d', '%s', '%s', '%s', '%d', '%s', '%d')
+        );
+        
+        if ($result === false) {
+            $errors[] = 'Ошибка при сохранении отзыва для ' . $dish_name . ': ' . $wpdb->last_error;
+        } else {
+            $saved_count++;
+        }
+    }
+    
+    if ($saved_count === 0) {
+        wp_send_json_error('Не удалось сохранить ни одного отзыва. ' . implode(' ', $errors));
+    }
+    
+    // Сохраняем общий комментарий и флаг поделились в Instagram в первой записи
+    if (!empty($general_comment) || $shared_instagram) {
+        $first_feedback_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $table_name WHERE token = %s ORDER BY id ASC LIMIT 1",
+            $token
+        ));
+        
+        if ($first_feedback_id) {
+            $wpdb->update(
+                $table_name,
+                array(
+                    'general_comment' => $general_comment,
+                    'shared_instagram' => $shared_instagram,
+                ),
+                array('id' => $first_feedback_id),
+                array('%s', '%d'),
+                array('%d')
+            );
+        }
+    }
+    
+    wp_send_json_success('Отзыв сохранен');
+}
+
+// AJAX обработчик для получения детальных отзывов по блюду
+add_action('wp_ajax_get_feedback_details', 'gustolocal_get_feedback_details');
+function gustolocal_get_feedback_details() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Доступ запрещен');
+    }
+    
+    $dish_name = sanitize_text_field($_POST['dish_name'] ?? '');
+    $dish_unit = sanitize_text_field($_POST['dish_unit'] ?? '');
+    
+    if (empty($dish_name)) {
+        wp_send_json_error('Название блюда не указано');
+    }
+    
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    
+    $query = $wpdb->prepare(
+        "SELECT 
+            f.*,
+            DATE_FORMAT(f.created_at, '%%d.%%m.%%Y %%H:%%i') as date
+        FROM $table_name f
+        WHERE f.dish_name = %s",
+        $dish_name
+    );
+    
+    if (!empty($dish_unit)) {
+        $query .= $wpdb->prepare(" AND f.dish_unit = %s", $dish_unit);
+    }
+    
+    $query .= " ORDER BY f.created_at DESC LIMIT 100";
+    
+    $feedbacks = $wpdb->get_results($query, ARRAY_A);
+    
+    // Группируем по заказам, чтобы показать общий комментарий один раз
+    $grouped_feedbacks = array();
+    foreach ($feedbacks as $feedback) {
+        $order_id = $feedback['order_id'];
+        if (!isset($grouped_feedbacks[$order_id])) {
+            $grouped_feedbacks[$order_id] = array(
+                'order_id' => $order_id,
+                'customer_name' => $feedback['customer_name'],
+                'date' => $feedback['date'],
+                'general_comment' => $feedback['general_comment'],
+                'shared_instagram' => $feedback['shared_instagram'],
+                'dishes' => array(),
+            );
+        }
+        $grouped_feedbacks[$order_id]['dishes'][] = array(
+            'dish_name' => $feedback['dish_name'],
+            'dish_unit' => $feedback['dish_unit'],
+            'rating' => $feedback['rating'],
+        );
+    }
+    
+    // Преобразуем в простой массив для отображения
+    $result = array();
+    foreach ($grouped_feedbacks as $order_feedback) {
+        // Находим рейтинг для нужного блюда
+        $rating = null;
+        foreach ($order_feedback['dishes'] as $dish) {
+            if ($dish['dish_name'] === $dish_name && 
+                (empty($dish_unit) || $dish['dish_unit'] === $dish_unit)) {
+                $rating = $dish['rating'];
+                break;
+            }
+        }
+        
+        if ($rating) {
+            $result[] = array(
+                'order_id' => $order_feedback['order_id'],
+                'customer_name' => $order_feedback['customer_name'],
+                'date' => $order_feedback['date'],
+                'rating' => $rating,
+                'general_comment' => $order_feedback['general_comment'],
+                'shared_instagram' => $order_feedback['shared_instagram'],
+            );
+        }
+    }
+    
+    wp_send_json_success($result);
+}
+

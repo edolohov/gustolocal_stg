@@ -312,7 +312,12 @@ function wmb_page_import(){
         $title = trim($r[$map['Название']]??''); if(!$title){ $skipped++; continue; }
         $price = floatval(str_replace(',','.', $r[$map['Цена']]??0));
         $unit  = trim($r[$map['Единица']]??'');
-        $section = trim($r[$map['Категория']]??'');
+        $section_raw = trim($r[$map['Категория']]??'');
+        
+        // Маппинг категории через функцию темы, если доступна
+        $section = function_exists('gustolocal_map_category_by_alias') 
+          ? gustolocal_map_category_by_alias($section_raw) 
+          : $section_raw;
         $tags_str= trim($r[$map['Теги']]??'');
         $ing    = isset($map['Состав'])     ? trim((string)($r[$map['Состав']]??''))     : '';
         $alrg   = isset($map['Аллергены'])  ? trim((string)($r[$map['Аллергены']]??''))  : '';
@@ -492,28 +497,52 @@ add_action('rest_api_init', function () {
 
       $out_sections = [];
       foreach ($sections as $title => $items) {
-        $out_sections[] = ['title' => $title, 'items' => $items];
+        // Используем отображаемое название категории, если функция доступна
+        $display_title = function_exists('gustolocal_get_category_display_name') 
+          ? gustolocal_get_category_display_name($title) 
+          : $title;
+        $out_sections[] = ['title' => $display_title, 'items' => $items];
       }
 
-      $hard_order = [
-        'Завтраки и сладкое',
-        'Авторские сэндвичи и перекусы',
-        'Паста ручной работы',
-        'Основные блюда',
-        'Гарниры и зелень',
-        'Супы и крем-супы',
-        'Для запаса / в морозильник',
-      ];
+      // Используем настройки категорий из темы, если доступны
+      if (function_exists('gustolocal_get_ordered_categories')) {
+        $ordered_settings = gustolocal_get_ordered_categories();
+        $order_map = [];
+        foreach ($ordered_settings as $original => $config) {
+          $display = !empty($config['display']) ? $config['display'] : $original;
+          $order_map[mb_strtolower($display)] = isset($config['order']) ? (int)$config['order'] : 999;
+        }
+        
+        usort($out_sections, function($a, $b) use ($order_map) {
+          $a_title_lower = mb_strtolower($a['title']);
+          $b_title_lower = mb_strtolower($b['title']);
+          $ai = isset($order_map[$a_title_lower]) ? $order_map[$a_title_lower] : PHP_INT_MAX;
+          $bi = isset($order_map[$b_title_lower]) ? $order_map[$b_title_lower] : PHP_INT_MAX;
+          if ($ai === $bi) return strcmp($a['title'], $b['title']);
+          return $ai - $bi;
+        });
+      } else {
+        // Fallback на старый порядок, если функции темы недоступны
+        $hard_order = [
+          'Завтраки и сладкое',
+          'Авторские сэндвичи и перекусы',
+          'Паста ручной работы',
+          'Основные блюда',
+          'Гарниры и зелень',
+          'Супы и крем-супы',
+          'Для запаса / в морозильник',
+        ];
 
-      $index = array_map('mb_strtolower', $hard_order);
-      usort($out_sections, function($a, $b) use ($index) {
-        $ai = array_search(mb_strtolower($a['title']), $index);
-        $bi = array_search(mb_strtolower($b['title']), $index);
-        $ai = ($ai === false) ? PHP_INT_MAX : $ai;
-        $bi = ($bi === false) ? PHP_INT_MAX : $bi;
-        if ($ai === $bi) return strcmp($a['title'], $b['title']);
-        return $ai - $bi;
-      });
+        $index = array_map('mb_strtolower', $hard_order);
+        usort($out_sections, function($a, $b) use ($index) {
+          $ai = array_search(mb_strtolower($a['title']), $index);
+          $bi = array_search(mb_strtolower($b['title']), $index);
+          $ai = ($ai === false) ? PHP_INT_MAX : $ai;
+          $bi = ($bi === false) ? PHP_INT_MAX : $bi;
+          if ($ai === $bi) return strcmp($a['title'], $b['title']);
+          return $ai - $bi;
+        });
+      }
 
       return rest_ensure_response([
         'description'     => '',
