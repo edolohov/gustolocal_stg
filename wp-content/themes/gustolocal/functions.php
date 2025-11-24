@@ -2457,7 +2457,17 @@ function gustolocal_feedback_results_page() {
             MAX(f.general_comment) as general_comment,
             MAX(f.shared_instagram) as shared_instagram,
             COUNT(*) as dishes_count,
-            ROUND(AVG(f.rating), 2) as avg_rating
+            ROUND(AVG(f.rating), 2) as avg_rating,
+            GROUP_CONCAT(
+                CONCAT(
+                    f.dish_name,
+                    IF(f.dish_unit != '', CONCAT(' (', f.dish_unit, ')'), ''),
+                    '::',
+                    f.rating
+                )
+                ORDER BY f.created_at DESC
+                SEPARATOR '||'
+            ) as dishes_list
         FROM $table_name f
         GROUP BY f.token, f.order_id, f.customer_name
         ORDER BY MAX(f.created_at) DESC
@@ -2700,6 +2710,7 @@ function gustolocal_feedback_results_page() {
                     <th>Заказ</th>
                     <th>Блюд</th>
                     <th>Средняя</th>
+                    <th>Отзывы</th>
                     <th>Комментарий</th>
                     <th>Instagram</th>
                     <th>Действия</th>
@@ -2714,6 +2725,20 @@ function gustolocal_feedback_results_page() {
                             <td>#<?php echo esc_html($feedback['order_id']); ?></td>
                             <td><?php echo esc_html($feedback['dishes_count']); ?></td>
                             <td><?php echo esc_html(number_format((float) $feedback['avg_rating'], 2)); ?></td>
+                            <td>
+                                <?php
+                                if (!empty($feedback['dishes_list'])) {
+                                    $items = explode('||', $feedback['dishes_list']);
+                                    foreach ($items as $item) {
+                                        list($name, $rating) = array_pad(explode('::', $item), 2, '');
+                                        $emoji = array('1' => '😞', '2' => '😐', '3' => '😊', '4' => '😍');
+                                        echo '<div>' . esc_html($name) . ': ' . ($emoji[$rating] ?? $rating) . '</div>';
+                                    }
+                                } else {
+                                    echo '—';
+                                }
+                                ?>
+                            </td>
                             <td><?php echo $feedback['general_comment'] ? nl2br(esc_html($feedback['general_comment'])) : '—'; ?></td>
                             <td><?php echo !empty($feedback['shared_instagram']) ? '✅' : '—'; ?></td>
                             <td>
