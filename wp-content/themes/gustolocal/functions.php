@@ -3043,6 +3043,10 @@ function gustolocal_display_feedback_form($token, $order_id) {
                     <p>Вы уже оставили отзыв. Мы ценим ваше мнение!</p>
                 </div>
             <?php else: ?>
+                <div class="feedback-header">
+                    <h1>Нам важно ваше мнение! 🙏</h1>
+                    <p>Пожалуйста, оцените каждое блюдо из последнего заказа:</p>
+                </div>
                 <form id="feedback-form">
                     <input type="hidden" name="action" value="guest_feedback_submit">
                     <input type="hidden" name="token" value="<?php echo esc_attr($token); ?>">
