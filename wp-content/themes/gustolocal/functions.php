@@ -2231,6 +2231,16 @@ function gustolocal_ensure_feedback_table_columns() {
             $wpdb->query($alter_sql);
         }
     }
+    
+    // Проверяем колонку dish_unit в таблице кастомных опросов
+    $custom_entries_table = $wpdb->prefix . 'custom_feedback_entries';
+    $exists = $wpdb->get_var($wpdb->prepare(
+        "SHOW COLUMNS FROM {$custom_entries_table} LIKE %s",
+        'dish_unit'
+    ));
+    if (!$exists) {
+        $wpdb->query("ALTER TABLE {$custom_entries_table} ADD COLUMN dish_unit varchar(100) DEFAULT '' AFTER dish_name");
+    }
 }
 
 // Регистрация страницы управления опросами
@@ -3769,7 +3779,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
                         // Заменяем весь контент контейнера, чтобы убрать заголовок
                         var container = document.querySelector('.feedback-container');
                         if (container) {
-                            container.innerHTML = '<div class="success-message">Спасибо за ваш отзыв! 🙏</div>';
+                            container.innerHTML = '<div class="success-message">Спасибо! Ваш отзыв сохранен. Мы ценим ваше мнение!</div>';
                         }
                     } else {
                         alert('Ошибка: ' + (data.data || 'Не удалось сохранить отзыв'));
