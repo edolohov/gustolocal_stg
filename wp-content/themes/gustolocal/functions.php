@@ -3749,6 +3749,14 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
                 
                 var formData = new FormData(form);
                 
+                // Убеждаемся, что все скрытые поля с названиями блюд передаются
+                document.querySelectorAll('input[type="hidden"][name^="dish_name_"]').forEach(function(input) {
+                    formData.append(input.name, input.value);
+                });
+                document.querySelectorAll('input[type="hidden"][name^="dish_unit_"]').forEach(function(input) {
+                    formData.append(input.name, input.value);
+                });
+                
                 fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
                     method: 'POST',
                     body: formData
@@ -3758,7 +3766,11 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
                 })
                 .then(function(data) {
                     if (data.success) {
-                        form.innerHTML = '<div class="success-message">Спасибо за ваш отзыв! 🙏</div>';
+                        // Заменяем весь контент контейнера, чтобы убрать заголовок
+                        var container = document.querySelector('.feedback-container');
+                        if (container) {
+                            container.innerHTML = '<div class="success-message">Спасибо за ваш отзыв! 🙏</div>';
+                        }
                     } else {
                         alert('Ошибка: ' + (data.data || 'Не удалось сохранить отзыв'));
                         if (submitBtn) {
@@ -4080,8 +4092,13 @@ function gustolocal_handle_custom_feedback_submit() {
         wp_send_json_error('Запрос не найден');
     }
     
+    // Логируем входящие данные для отладки
+    error_log('Custom feedback submit - POST data: ' . print_r($_POST, true));
+    
     // Обрабатываем рейтинги
     $ratings = array();
+    
+    // Сначала пробуем получить из массива ratings
     if (isset($_POST['ratings']) && is_array($_POST['ratings'])) {
         foreach ($_POST['ratings'] as $index => $rating) {
             $rating = intval($rating);
@@ -4109,6 +4126,23 @@ function gustolocal_handle_custom_feedback_submit() {
                 );
             }
         }
+    } else {
+        // Альтернативный способ: ищем все поля, начинающиеся с dish_name_
+        foreach ($_POST as $key => $value) {
+            if (strpos($key, 'dish_name_') === 0) {
+                $index = str_replace('dish_name_', '', $key);
+                $rating = intval($_POST["ratings[{$index}]"] ?? 0);
+                if ($rating > 0) {
+                    $dish_name = sanitize_text_field($value);
+                    $dish_unit = sanitize_text_field($_POST["dish_unit_{$index}"] ?? '');
+                    $ratings[] = array(
+                        'dish_name' => $dish_name,
+                        'dish_unit' => $dish_unit,
+                        'rating' => $rating
+                    );
+                }
+            }
+        }
     }
     
     if (empty($ratings)) {
@@ -4117,7 +4151,7 @@ function gustolocal_handle_custom_feedback_submit() {
     
     // Сохраняем рейтинги
     foreach ($ratings as $rating_data) {
-        $wpdb->insert(
+        $insert_result = $wpdb->insert(
             $entries_table,
             array(
                 'request_id' => $request_id,
@@ -4128,6 +4162,11 @@ function gustolocal_handle_custom_feedback_submit() {
             ),
             array('%d', '%s', '%s', '%d', '%s')
         );
+        
+        if ($insert_result === false) {
+            error_log('Custom feedback insert error: ' . $wpdb->last_error);
+            wp_send_json_error('Ошибка сохранения: ' . $wpdb->last_error);
+        }
     }
     
     // Обновляем статус запроса и сохраняем общий комментарий
@@ -4135,7 +4174,7 @@ function gustolocal_handle_custom_feedback_submit() {
     $shared_instagram = intval($_POST['shared_instagram'] ?? 0);
     $shared_google = intval($_POST['shared_google'] ?? 0);
     
-    $wpdb->update(
+    $update_result = $wpdb->update(
         $requests_table,
         array(
             'status' => 'submitted',
@@ -4148,6 +4187,11 @@ function gustolocal_handle_custom_feedback_submit() {
         array('%s', '%s', '%d', '%d', '%s'),
         array('%d')
     );
+    
+    if ($update_result === false) {
+        error_log('Custom feedback update error: ' . $wpdb->last_error);
+        wp_send_json_error('Ошибка обновления: ' . $wpdb->last_error);
+    }
     
     wp_send_json_success('Отзыв сохранен');
 }
@@ -4364,11 +4408,13 @@ function gustolocal_custom_feedback_management_page() {
                         <th>Контакт</th>
                         <th>Блюд</th>
                         <th>Статус</th>
-                        <th style="width: 400px;">Действия</th>
+                        <th style="width: 500px;">Действия</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($requests as $request): 
+                    <?php 
+                    $delete_nonce = wp_create_nonce('gustolocal_custom_feedback_delete');
+                    foreach ($requests as $request): 
                         $dishes_list = explode("\n", $request['dishes']);
                         $dishes_count = count(array_filter($dishes_list, 'trim'));
                         $feedback_url = $site_url . '/feedback/' . $request['token'];
@@ -4409,6 +4455,12 @@ function gustolocal_custom_feedback_management_page() {
                                             WhatsApp
                                         </a>
                                     <?php endif; ?>
+                                    <button type="button" 
+                                            class="button button-small delete-custom-feedback-manage-btn" 
+                                            data-token="<?php echo esc_attr($request['token']); ?>"
+                                            style="color: #dc3232;">
+                                        Удалить
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -4441,6 +4493,50 @@ function gustolocal_custom_feedback_management_page() {
                     this.textContent = originalText;
                     this.classList.remove('button-primary');
                 }.bind(this), 2000);
+            });
+        });
+        
+        // Обработчик удаления опроса
+        document.querySelectorAll('.delete-custom-feedback-manage-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var token = this.getAttribute('data-token');
+                if (!token) {
+                    return;
+                }
+                
+                if (!confirm('Удалить опрос полностью? После удаления ссылка снова станет активной. Это действие нельзя отменить.')) {
+                    return;
+                }
+                
+                var formData = new FormData();
+                formData.append('action', 'gustolocal_delete_custom_feedback');
+                formData.append('token', token);
+                formData.append('nonce', '<?php echo esc_js($delete_nonce); ?>');
+                
+                var btnElement = this;
+                btnElement.disabled = true;
+                btnElement.textContent = 'Удаление...';
+                
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        // Удаляем строку из таблицы
+                        btnElement.closest('tr').remove();
+                    } else {
+                        alert(data.data || 'Не удалось удалить опрос');
+                        btnElement.disabled = false;
+                        btnElement.textContent = 'Удалить';
+                    }
+                })
+                .catch(function() {
+                    alert('Ошибка при удалении опроса');
+                    btnElement.disabled = false;
+                    btnElement.textContent = 'Удалить';
+                });
             });
         });
     });
