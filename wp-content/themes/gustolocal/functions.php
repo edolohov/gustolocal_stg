@@ -3099,7 +3099,7 @@ function gustolocal_display_feedback_form($token, $order_id) {
             <?php else: ?>
                 <div class="feedback-header">
                     <h1>Нам важно ваше мнение! 🙏</h1>
-                    <p>Пожалуйста, оцените каждое блюдо из последнего заказа:</p>
+                    <p>Пожалуйста, оцените блюда из последнего заказа (пропускайте, если не успели попробовать):</p>
                 </div>
                 <form id="feedback-form">
                     <input type="hidden" name="action" value="guest_feedback_submit">
@@ -3183,17 +3183,19 @@ function gustolocal_display_feedback_form($token, $order_id) {
             });
             
             function checkFormComplete() {
-                var allRated = true;
+                var anyRated = false;
                 document.querySelectorAll('.dish-item').forEach(function(item) {
                     var dish = item.getAttribute('data-dish');
                     var rating = document.querySelector('input[name="ratings[' + dish + ']"]').value;
-                    if (!rating) {
-                        allRated = false;
+                    if (rating) {
+                        anyRated = true;
                     }
                 });
                 
-                document.getElementById('submit-btn').disabled = !allRated;
+                document.getElementById('submit-btn').disabled = !anyRated;
             }
+            
+            checkFormComplete();
             
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
