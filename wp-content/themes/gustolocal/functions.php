@@ -3194,10 +3194,14 @@ function gustolocal_display_feedback_form($token, $order_id) {
                             <span class="share-icon">↗️</span>
                             <span>Поделиться нашим Instagram</span>
                         </button>
-                        <button type="button" class="share-button share-button--google" id="share-google-btn" onclick="shareGoogle()">
+                        <a class="share-button share-button--google"
+                           href="https://maps.app.goo.gl/6rmjMdquG5vcVFry6"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           onclick="markShareField('shared-google-field')">
                             <span class="share-icon">★</span>
                             <span>Оставить отзыв в Google Maps</span>
-                        </button>
+                        </a>
                     </div>
                     
                     <button type="submit" class="submit-btn" id="submit-btn">
@@ -3321,7 +3325,7 @@ function gustolocal_display_feedback_form($token, $order_id) {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(instagramUrl).then(function() {
                         alert('Ссылка на Instagram скопирована! Вставьте её в любое приложение.');
-                        markShare('share-btn', 'shared-instagram-field', 'Поделились');
+                        trackShare();
                     }).catch(function() {
                         // Если не удалось скопировать, просто открываем
                         window.open(instagramUrl, '_blank');
@@ -3335,27 +3339,15 @@ function gustolocal_display_feedback_form($token, $order_id) {
             }
         }
         
-        function shareGoogle() {
-            var googleUrl = 'https://maps.app.goo.gl/6rmjMdquG5vcVFry6';
-            markShare('share-google-btn', 'shared-google-field', 'Отзыв отправлен');
-            window.open(googleUrl, '_blank');
-        }
-        
-        function markShare(buttonId, fieldId, successText) {
+        function markShareField(fieldId) {
             var field = document.getElementById(fieldId);
             if (field) {
                 field.value = '1';
             }
-            var btn = document.getElementById(buttonId);
-            if (btn) {
-                btn.style.opacity = '0.7';
-                btn.disabled = true;
-                btn.innerHTML = '<span class="share-icon">✓</span><span>' + successText + '</span>';
-            }
         }
         
         function trackShare() {
-            markShare('share-btn', 'shared-instagram-field', 'Поделились');
+            markShareField('shared-instagram-field');
         }
         </script>
     </body>
