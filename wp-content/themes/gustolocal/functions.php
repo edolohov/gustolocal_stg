@@ -2293,14 +2293,7 @@ function gustolocal_feedback_management_page() {
     // Получаем параметры фильтрации
     $date_from = isset($_POST['date_from']) ? sanitize_text_field($_POST['date_from']) : '';
     $date_to = isset($_POST['date_to']) ? sanitize_text_field($_POST['date_to']) : '';
-    $status_filter = isset($_POST['status']) ? sanitize_text_field($_POST['status']) : '';
-    
-    // Если фильтры не заданы, используем вторник неделю назад по умолчанию
-    if (empty($date_from) || empty($date_to)) {
-        $last_tuesday = strtotime('last tuesday');
-        $date_from = date('Y-m-d', $last_tuesday);
-        $date_to = date('Y-m-d', $last_tuesday);
-    }
+    $status_filter = isset($_POST['status']) ? sanitize_text_field($_POST['status']) : 'wc-on-hold';
     
     $customers = gustolocal_get_customers_for_feedback(
         $date_from ? $date_from . ' 00:00:00' : null,
