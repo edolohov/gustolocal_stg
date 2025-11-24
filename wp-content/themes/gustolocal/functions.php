@@ -2175,10 +2175,11 @@ function gustolocal_create_feedback_table() {
     
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
-
+    
+    // Создание таблиц для кастомных опросов
     $custom_requests_table = $wpdb->prefix . 'custom_feedback_requests';
-    $custom_entries_table  = $wpdb->prefix . 'custom_feedback_entries';
-
+    $custom_entries_table = $wpdb->prefix . 'custom_feedback_entries';
+    
     $sql_requests = "CREATE TABLE IF NOT EXISTS $custom_requests_table (
         id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         token varchar(100) NOT NULL,
@@ -2192,19 +2193,22 @@ function gustolocal_create_feedback_table() {
         submitted_at datetime DEFAULT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
-        KEY token (token)
+        KEY token (token),
+        KEY status (status)
     ) $charset_collate;";
-
+    
     $sql_entries = "CREATE TABLE IF NOT EXISTS $custom_entries_table (
         id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         request_id bigint(20) UNSIGNED NOT NULL,
         dish_name varchar(255) NOT NULL,
+        dish_unit varchar(100) DEFAULT '',
         rating int(1) NOT NULL DEFAULT 0,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
-        KEY request_id (request_id)
+        KEY request_id (request_id),
+        KEY dish_name (dish_name)
     ) $charset_collate;";
-
+    
     dbDelta($sql_requests);
     dbDelta($sql_entries);
 }
@@ -2249,14 +2253,23 @@ function gustolocal_add_feedback_management_page() {
         'gustolocal-feedback-results',
         'gustolocal_feedback_results_page'
     );
-
+    
     add_submenu_page(
         'woocommerce',
         'Кастомные опросы',
         'Кастомные опросы',
         'manage_options',
         'gustolocal-custom-feedback',
-        'gustolocal_custom_feedback_page'
+        'gustolocal_custom_feedback_management_page'
+    );
+    
+    add_submenu_page(
+        'woocommerce',
+        'Результаты кастомных опросов',
+        'Результаты кастомных опросов',
+        'manage_options',
+        'gustolocal-custom-feedback-results',
+        'gustolocal_custom_feedback_results_page'
     );
 }
 
@@ -2491,24 +2504,6 @@ function gustolocal_feedback_results_page() {
     
     global $wpdb;
     $table_name = $wpdb->prefix . 'dish_feedback';
-    $custom_requests_table = $wpdb->prefix . 'custom_feedback_requests';
-    $custom_entries_table = $wpdb->prefix . 'custom_feedback_entries';
-    
-    // Проверяем, показываем ли кастомные опросы
-    $show_custom = isset($_GET['custom']) && $_GET['custom'] == '1';
-    $custom_token = isset($_GET['token']) ? sanitize_text_field($_GET['token']) : '';
-    
-    // Если указан токен, показываем результаты конкретного кастомного опроса
-    if ($show_custom && $custom_token) {
-        gustolocal_display_custom_feedback_results($custom_token);
-        return;
-    }
-    
-    // Если просто custom=1, показываем все кастомные опросы
-    if ($show_custom) {
-        gustolocal_display_all_custom_feedback_results();
-        return;
-    }
     
     // Получаем статистику по блюдам
     $dish_stats = $wpdb->get_results("
@@ -2560,15 +2555,6 @@ function gustolocal_feedback_results_page() {
     ?>
     <div class="wrap">
         <h1>Результаты отзывов о блюдах</h1>
-        
-        <nav class="nav-tab-wrapper">
-            <a href="<?php echo esc_url(admin_url('admin.php?page=gustolocal-feedback-results')); ?>" class="nav-tab <?php echo !$show_custom ? 'nav-tab-active' : ''; ?>">
-                Обычные отзывы
-            </a>
-            <a href="<?php echo esc_url(admin_url('admin.php?page=gustolocal-feedback-results&custom=1')); ?>" class="nav-tab <?php echo $show_custom ? 'nav-tab-active' : ''; ?>">
-                Кастомные опросы
-            </a>
-        </nav>
         
         <h2>Статистика по блюдам</h2>
         <p class="description">Таблица автоматически группирует отзывы по названию блюда и единице измерения. Кликните на строку, чтобы увидеть все отзывы по этому блюду.</p>
@@ -3442,13 +3428,8 @@ function gustolocal_display_feedback_form($token, $order_id) {
 
 // Отображение формы кастомного опроса
 function gustolocal_display_custom_feedback_form($token, $custom_request) {
-    // Проверяем, не заполнен ли уже опрос
-    global $wpdb;
-    $custom_entries_table = $wpdb->prefix . 'custom_feedback_entries';
-    $already_submitted = $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM $custom_entries_table WHERE request_id = %d",
-        $custom_request['id']
-    ));
+    // Проверяем, не заполнен ли уже опрос (только если статус submitted)
+    $already_submitted = $custom_request['status'] === 'submitted';
     
     // Парсим блюда из текста
     $dishes_lines = explode("\n", $custom_request['dishes']);
@@ -3477,6 +3458,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
     
     $customer_name = $custom_request['client_name'] ?: 'Дорогой клиент';
     
+    // Используем ту же HTML структуру, что и для обычных опросов
     ?>
     <!DOCTYPE html>
     <html <?php language_attributes(); ?>>
@@ -3649,7 +3631,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
     </head>
     <body>
         <div class="feedback-container">
-            <?php if ($already_submitted > 0): ?>
+            <?php if ($already_submitted): ?>
                 <div class="success-message">
                     Спасибо! Ваш отзыв уже был отправлен. 🙏
                 </div>
@@ -3685,6 +3667,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
                             </div>
                             <input type="hidden" name="ratings[<?php echo $index; ?>]" value="0">
                             <input type="hidden" name="dish_name_<?php echo $index; ?>" value="<?php echo esc_attr($dish['name']); ?>">
+                            <input type="hidden" name="dish_unit_<?php echo $index; ?>" value="<?php echo esc_attr($dish['unit']); ?>">
                         </div>
                     <?php endforeach; ?>
                     
@@ -3703,8 +3686,8 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
                             <span class="share-icon">⭐</span>
                             Оставить отзыв в Google Maps
                         </button>
-                        <input type="hidden" name="shared_instagram" value="0">
-                        <input type="hidden" name="shared_google" value="0">
+                        <input type="hidden" name="shared_instagram" value="0" id="shared-instagram-field">
+                        <input type="hidden" name="shared_google" value="0" id="shared-google-field">
                     </div>
                     
                     <button type="submit" class="submit-btn" id="submit-btn">Отправить отзыв</button>
@@ -3736,7 +3719,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
                     
                     // Сохраняем рейтинг
                     ratings[dishIndex] = rating;
-                    var hiddenInput = dishItem.querySelector('input[type="hidden"]');
+                    var hiddenInput = dishItem.querySelector('input[type="hidden"][name^="ratings"]');
                     if (hiddenInput) {
                         hiddenInput.value = rating;
                     }
@@ -3797,7 +3780,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
         });
         
         function shareInstagram() {
-            var sharedInput = document.querySelector('input[name="shared_instagram"]');
+            var sharedInput = document.getElementById('shared-instagram-field');
             if (sharedInput) {
                 sharedInput.value = '1';
             }
@@ -3816,7 +3799,7 @@ function gustolocal_display_custom_feedback_form($token, $custom_request) {
         }
         
         function shareGoogle() {
-            var sharedInput = document.querySelector('input[name="shared_google"]');
+            var sharedInput = document.getElementById('shared-google-field');
             if (sharedInput) {
                 sharedInput.value = '1';
             }
@@ -3951,103 +3934,6 @@ function gustolocal_handle_feedback_submit() {
     wp_send_json_success('Отзыв сохранен');
 }
 
-// AJAX обработчик для сохранения кастомных отзывов
-add_action('wp_ajax_guest_custom_feedback_submit', 'gustolocal_handle_custom_feedback_submit');
-add_action('wp_ajax_nopriv_guest_custom_feedback_submit', 'gustolocal_handle_custom_feedback_submit');
-function gustolocal_handle_custom_feedback_submit() {
-    $action = sanitize_text_field($_POST['action'] ?? '');
-    if (empty($action) || $action !== 'guest_custom_feedback_submit') {
-        wp_send_json_error('Неверный запрос');
-    }
-    
-    $token = sanitize_text_field($_POST['token'] ?? '');
-    $request_id = intval($_POST['request_id'] ?? 0);
-    
-    if (empty($token) || empty($request_id)) {
-        wp_send_json_error('Неверные параметры');
-    }
-    
-    global $wpdb;
-    $requests_table = $wpdb->prefix . 'custom_feedback_requests';
-    $entries_table = $wpdb->prefix . 'custom_feedback_entries';
-    
-    // Проверяем, что запрос существует
-    $request = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $requests_table WHERE id = %d AND token = %s",
-        $request_id,
-        $token
-    ), ARRAY_A);
-    
-    if (!$request) {
-        wp_send_json_error('Запрос не найден');
-    }
-    
-    // Обрабатываем рейтинги
-    $ratings = array();
-    if (isset($_POST['ratings']) && is_array($_POST['ratings'])) {
-        foreach ($_POST['ratings'] as $index => $rating) {
-            $rating = intval($rating);
-            if ($rating > 0) {
-                // Получаем название блюда из скрытого поля
-                $dish_name = sanitize_text_field($_POST["dish_name_{$index}"] ?? '');
-                if (empty($dish_name)) {
-                    // Если не нашли в POST, получаем из исходного списка блюд
-                    $dishes_lines = explode("\n", $request['dishes']);
-                    $line = trim($dishes_lines[intval($index)] ?? '');
-                    if (preg_match('/^(.+?)\s*\((.+?)\)$/', $line, $matches)) {
-                        $dish_name = trim($matches[1]);
-                    } else {
-                        $dish_name = $line;
-                    }
-                }
-                $ratings[] = array(
-                    'dish_name' => $dish_name,
-                    'rating' => $rating
-                );
-            }
-        }
-    }
-    
-    if (empty($ratings)) {
-        wp_send_json_error('Необходимо оценить хотя бы одно блюдо');
-    }
-    
-    // Сохраняем рейтинги
-    foreach ($ratings as $rating_data) {
-        $wpdb->insert(
-            $entries_table,
-            array(
-                'request_id' => $request_id,
-                'dish_name' => $rating_data['dish_name'],
-                'rating' => $rating_data['rating'],
-                'created_at' => current_time('mysql')
-            ),
-            array('%d', '%s', '%d', '%s')
-        );
-    }
-    
-    // Обновляем статус запроса и сохраняем общий комментарий
-    $general_comment = sanitize_textarea_field($_POST['general_comment'] ?? '');
-    $shared_instagram = intval($_POST['shared_instagram'] ?? 0);
-    $shared_google = intval($_POST['shared_google'] ?? 0);
-    
-    $wpdb->update(
-        $requests_table,
-        array(
-            'status' => 'submitted',
-            'general_comment' => $general_comment,
-            'shared_instagram' => $shared_instagram,
-            'shared_google' => $shared_google,
-            'submitted_at' => current_time('mysql')
-        ),
-        array('id' => $request_id),
-        array('%s', '%s', '%d', '%d', '%s'),
-        array('%d')
-    );
-    
-    wp_send_json_success('Отзыв сохранен');
-}
-
 // AJAX обработчик для получения детальных отзывов по блюду
 add_action('wp_ajax_get_feedback_details', 'gustolocal_get_feedback_details');
 function gustolocal_get_feedback_details() {
@@ -4163,8 +4049,222 @@ function gustolocal_delete_feedback() {
    КАСТОМНЫЕ ОПРОСЫ (БЕЗ ЗАКАЗОВ)
    ======================================== */
 
-// Страница управления кастомными опросами
-function gustolocal_custom_feedback_page() {
+// AJAX обработчик для сохранения кастомных отзывов
+add_action('wp_ajax_guest_custom_feedback_submit', 'gustolocal_handle_custom_feedback_submit');
+add_action('wp_ajax_nopriv_guest_custom_feedback_submit', 'gustolocal_handle_custom_feedback_submit');
+function gustolocal_handle_custom_feedback_submit() {
+    $action = sanitize_text_field($_POST['action'] ?? '');
+    if (empty($action) || $action !== 'guest_custom_feedback_submit') {
+        wp_send_json_error('Неверный запрос');
+    }
+    
+    $token = sanitize_text_field($_POST['token'] ?? '');
+    $request_id = intval($_POST['request_id'] ?? 0);
+    
+    if (empty($token) || empty($request_id)) {
+        wp_send_json_error('Неверные параметры');
+    }
+    
+    global $wpdb;
+    $requests_table = $wpdb->prefix . 'custom_feedback_requests';
+    $entries_table = $wpdb->prefix . 'custom_feedback_entries';
+    
+    // Проверяем, что запрос существует
+    $request = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $requests_table WHERE id = %d AND token = %s",
+        $request_id,
+        $token
+    ), ARRAY_A);
+    
+    if (!$request) {
+        wp_send_json_error('Запрос не найден');
+    }
+    
+    // Обрабатываем рейтинги
+    $ratings = array();
+    if (isset($_POST['ratings']) && is_array($_POST['ratings'])) {
+        foreach ($_POST['ratings'] as $index => $rating) {
+            $rating = intval($rating);
+            if ($rating > 0) {
+                // Получаем название и единицу блюда из скрытых полей
+                $dish_name = sanitize_text_field($_POST["dish_name_{$index}"] ?? '');
+                $dish_unit = sanitize_text_field($_POST["dish_unit_{$index}"] ?? '');
+                
+                if (empty($dish_name)) {
+                    // Если не нашли в POST, получаем из исходного списка блюд
+                    $dishes_lines = explode("\n", $request['dishes']);
+                    $line = trim($dishes_lines[intval($index)] ?? '');
+                    if (preg_match('/^(.+?)\s*\((.+?)\)$/', $line, $matches)) {
+                        $dish_name = trim($matches[1]);
+                        $dish_unit = trim($matches[2]);
+                    } else {
+                        $dish_name = $line;
+                        $dish_unit = '';
+                    }
+                }
+                $ratings[] = array(
+                    'dish_name' => $dish_name,
+                    'dish_unit' => $dish_unit,
+                    'rating' => $rating
+                );
+            }
+        }
+    }
+    
+    if (empty($ratings)) {
+        wp_send_json_error('Необходимо оценить хотя бы одно блюдо');
+    }
+    
+    // Сохраняем рейтинги
+    foreach ($ratings as $rating_data) {
+        $wpdb->insert(
+            $entries_table,
+            array(
+                'request_id' => $request_id,
+                'dish_name' => $rating_data['dish_name'],
+                'dish_unit' => $rating_data['dish_unit'],
+                'rating' => $rating_data['rating'],
+                'created_at' => current_time('mysql')
+            ),
+            array('%d', '%s', '%s', '%d', '%s')
+        );
+    }
+    
+    // Обновляем статус запроса и сохраняем общий комментарий
+    $general_comment = sanitize_textarea_field($_POST['general_comment'] ?? '');
+    $shared_instagram = intval($_POST['shared_instagram'] ?? 0);
+    $shared_google = intval($_POST['shared_google'] ?? 0);
+    
+    $wpdb->update(
+        $requests_table,
+        array(
+            'status' => 'submitted',
+            'general_comment' => $general_comment,
+            'shared_instagram' => $shared_instagram,
+            'shared_google' => $shared_google,
+            'submitted_at' => current_time('mysql')
+        ),
+        array('id' => $request_id),
+        array('%s', '%s', '%d', '%d', '%s'),
+        array('%d')
+    );
+    
+    wp_send_json_success('Отзыв сохранен');
+}
+
+// AJAX обработчик для удаления кастомных отзывов
+add_action('wp_ajax_gustolocal_delete_custom_feedback', 'gustolocal_delete_custom_feedback');
+function gustolocal_delete_custom_feedback() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Доступ запрещен');
+    }
+    
+    check_ajax_referer('gustolocal_custom_feedback_delete', 'nonce');
+    
+    $token = sanitize_text_field($_POST['token'] ?? '');
+    if (empty($token)) {
+        wp_send_json_error('Токен не указан');
+    }
+    
+    global $wpdb;
+    $requests_table = $wpdb->prefix . 'custom_feedback_requests';
+    $entries_table = $wpdb->prefix . 'custom_feedback_entries';
+    
+    // Получаем request_id по токену
+    $request = $wpdb->get_row($wpdb->prepare(
+        "SELECT id FROM $requests_table WHERE token = %s",
+        $token
+    ), ARRAY_A);
+    
+    if (!$request) {
+        wp_send_json_error('Запрос не найден');
+    }
+    
+    $request_id = $request['id'];
+    
+    // Удаляем все записи оценок
+    $deleted_entries = $wpdb->query($wpdb->prepare(
+        "DELETE FROM $entries_table WHERE request_id = %d",
+        $request_id
+    ));
+    
+    // Сбрасываем статус запроса в pending и очищаем данные
+    $updated = $wpdb->update(
+        $requests_table,
+        array(
+            'status' => 'pending',
+            'general_comment' => '',
+            'shared_instagram' => 0,
+            'shared_google' => 0,
+            'submitted_at' => null
+        ),
+        array('id' => $request_id),
+        array('%s', '%s', '%d', '%d', '%s'),
+        array('%d')
+    );
+    
+    if ($updated === false) {
+        wp_send_json_error('Ошибка обновления: ' . $wpdb->last_error);
+    }
+    
+    wp_send_json_success(array('deleted_entries' => $deleted_entries, 'updated' => $updated));
+}
+
+// AJAX обработчик для получения детальных отзывов по блюду из кастомных опросов
+add_action('wp_ajax_get_custom_feedback_details', 'gustolocal_get_custom_feedback_details');
+function gustolocal_get_custom_feedback_details() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Доступ запрещен');
+    }
+    
+    $dish_name = sanitize_text_field($_POST['dish_name'] ?? '');
+    $dish_unit = sanitize_text_field($_POST['dish_unit'] ?? '');
+    
+    if (empty($dish_name)) {
+        wp_send_json_error('Название блюда не указано');
+    }
+    
+    global $wpdb;
+    $entries_table = $wpdb->prefix . 'custom_feedback_entries';
+    $requests_table = $wpdb->prefix . 'custom_feedback_requests';
+    
+    $query = $wpdb->prepare(
+        "SELECT 
+            e.*,
+            r.client_name,
+            r.general_comment,
+            DATE_FORMAT(e.created_at, '%%d.%%m.%%Y %%H:%%i') as date
+        FROM $entries_table e
+        INNER JOIN $requests_table r ON r.id = e.request_id
+        WHERE e.dish_name = %s",
+        $dish_name
+    );
+    
+    if (!empty($dish_unit)) {
+        $query .= $wpdb->prepare(" AND e.dish_unit = %s", $dish_unit);
+    } else {
+        $query .= " AND (e.dish_unit = '' OR e.dish_unit IS NULL)";
+    }
+    
+    $query .= " AND e.rating > 0 ORDER BY e.created_at DESC";
+    
+    $results = $wpdb->get_results($query, ARRAY_A);
+    
+    $result = array();
+    foreach ($results as $row) {
+        $result[] = array(
+            'client_name' => $row['client_name'],
+            'date' => $row['date'],
+            'rating' => $row['rating'],
+            'general_comment' => $row['general_comment'],
+        );
+    }
+    
+    wp_send_json_success($result);
+}
+
+// Страница управления кастомными опросами (аналог "Обратная связь")
+function gustolocal_custom_feedback_management_page() {
     if (!current_user_can('manage_options')) {
         return;
     }
@@ -4210,7 +4310,7 @@ function gustolocal_custom_feedback_page() {
     
     // Получаем список созданных опросов
     $requests = $wpdb->get_results(
-        "SELECT * FROM $requests_table ORDER BY created_at DESC LIMIT 50",
+        "SELECT * FROM $requests_table ORDER BY created_at DESC LIMIT 100",
         ARRAY_A
     );
     
@@ -4251,26 +4351,38 @@ function gustolocal_custom_feedback_page() {
         </form>
         
         <h2>Созданные опросы</h2>
-        <table class="wp-list-table widefat fixed striped">
-            <thead>
-                <tr>
-                    <th>Дата создания</th>
-                    <th>Клиент</th>
-                    <th>Контакт</th>
-                    <th>Блюд</th>
-                    <th>Статус</th>
-                    <th>Ссылка</th>
-                    <th>Действия</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($requests)): ?>
+        <?php if (empty($requests)): ?>
+            <div class="notice notice-info">
+                <p>Опросы не созданы.</p>
+            </div>
+        <?php else: ?>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th>Дата создания</th>
+                        <th>Клиент</th>
+                        <th>Контакт</th>
+                        <th>Блюд</th>
+                        <th>Статус</th>
+                        <th style="width: 400px;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
                     <?php foreach ($requests as $request): 
                         $dishes_list = explode("\n", $request['dishes']);
                         $dishes_count = count(array_filter($dishes_list, 'trim'));
                         $feedback_url = $site_url . '/feedback/' . $request['token'];
                         $status_label = $request['status'] === 'submitted' ? 'Заполнен' : 'Ожидает';
                         $status_class = $request['status'] === 'submitted' ? 'success' : 'warning';
+                        
+                        // Формируем WhatsApp ссылку
+                        $whatsapp_link = '';
+                        if (!empty($request['client_contact'])) {
+                            $phone = preg_replace('/[^0-9]/', '', $request['client_contact']);
+                            if ($phone) {
+                                $whatsapp_link = 'https://wa.me/' . $phone;
+                            }
+                        }
                     ?>
                         <tr>
                             <td><?php echo esc_html(date('d.m.Y H:i', strtotime($request['created_at']))); ?></td>
@@ -4279,245 +4391,405 @@ function gustolocal_custom_feedback_page() {
                             <td><?php echo esc_html($dishes_count); ?></td>
                             <td><span class="status-<?php echo esc_attr($status_class); ?>"><?php echo esc_html($status_label); ?></span></td>
                             <td>
-                                <a href="<?php echo esc_url($feedback_url); ?>" target="_blank" class="button button-small">
-                                    Открыть
-                                </a>
-                            </td>
-                            <td>
-                                <a href="<?php echo esc_url(admin_url('admin.php?page=gustolocal-feedback-results&custom=1&token=' . $request['token'])); ?>" class="button button-small">
-                                    Результаты
-                                </a>
+                                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                                    <input type="text" 
+                                           id="custom-feedback-link-<?php echo esc_attr($request['id']); ?>" 
+                                           value="<?php echo esc_attr($feedback_url); ?>" 
+                                           readonly 
+                                           style="flex: 1; min-width: 200px; font-size: 11px;">
+                                    <button type="button" 
+                                            class="button button-small copy-link-btn" 
+                                            data-target="custom-feedback-link-<?php echo esc_attr($request['id']); ?>">
+                                        Копировать
+                                    </button>
+                                    <?php if ($whatsapp_link): ?>
+                                        <a href="<?php echo esc_url($whatsapp_link); ?>" 
+                                           target="_blank" 
+                                           class="button button-small">
+                                            WhatsApp
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="7">Опросы не созданы</td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        <?php endif; ?>
         
         <style>
         .status-success { color: #46b450; font-weight: bold; }
         .status-warning { color: #f56e28; font-weight: bold; }
         </style>
     </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.copy-link-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var targetId = this.getAttribute('data-target');
+                var input = document.getElementById(targetId);
+                input.select();
+                input.setSelectionRange(0, 99999);
+                document.execCommand('copy');
+                
+                var originalText = this.textContent;
+                this.textContent = 'Скопировано!';
+                this.classList.add('button-primary');
+                
+                setTimeout(function() {
+                    this.textContent = originalText;
+                    this.classList.remove('button-primary');
+                }.bind(this), 2000);
+            });
+        });
+    });
+    </script>
     <?php
 }
 
-// Функция для отображения результатов конкретного кастомного опроса
-function gustolocal_display_custom_feedback_results($token) {
-    global $wpdb;
-    $custom_requests_table = $wpdb->prefix . 'custom_feedback_requests';
-    $custom_entries_table = $wpdb->prefix . 'custom_feedback_entries';
-    
-    $request = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $custom_requests_table WHERE token = %s",
-        $token
-    ), ARRAY_A);
-    
-    if (!$request) {
-        echo '<div class="wrap"><p>Опрос не найден.</p></div>';
+// Страница результатов кастомных опросов (аналог "Результаты отзывов")
+function gustolocal_custom_feedback_results_page() {
+    if (!current_user_can('manage_options')) {
         return;
     }
     
-    $entries = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $custom_entries_table WHERE request_id = %d ORDER BY created_at DESC",
-        $request['id']
-    ), ARRAY_A);
-    
-    ?>
-    <div class="wrap">
-        <h1>Результаты кастомного опроса</h1>
-        <p><a href="<?php echo esc_url(admin_url('admin.php?page=gustolocal-feedback-results&custom=1')); ?>" class="button">← Все кастомные опросы</a></p>
-        
-        <h2>Информация о клиенте</h2>
-        <table class="form-table">
-            <tr>
-                <th>Имя клиента</th>
-                <td><strong><?php echo esc_html($request['client_name']); ?></strong></td>
-            </tr>
-            <tr>
-                <th>Контакт</th>
-                <td><?php echo esc_html($request['client_contact'] ?: '—'); ?></td>
-            </tr>
-            <tr>
-                <th>Статус</th>
-                <td><?php echo $request['status'] === 'submitted' ? '<span style="color: #46b450; font-weight: bold;">Заполнен</span>' : '<span style="color: #f56e28; font-weight: bold;">Ожидает</span>'; ?></td>
-            </tr>
-            <tr>
-                <th>Дата создания</th>
-                <td><?php echo esc_html(date('d.m.Y H:i', strtotime($request['created_at']))); ?></td>
-            </tr>
-            <?php if ($request['submitted_at']): ?>
-            <tr>
-                <th>Дата заполнения</th>
-                <td><?php echo esc_html(date('d.m.Y H:i', strtotime($request['submitted_at']))); ?></td>
-            </tr>
-            <?php endif; ?>
-        </table>
-        
-        <?php if (!empty($request['general_comment'])): ?>
-        <h2>Общий комментарий</h2>
-        <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-            <?php echo nl2br(esc_html($request['general_comment'])); ?>
-        </div>
-        <?php endif; ?>
-        
-        <h2>Оценки блюд</h2>
-        <?php if (!empty($entries)): ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th>Блюдо</th>
-                        <th>Оценка</th>
-                        <th>Дата</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php 
-                    $rating_emoji = array(1 => '😞', 2 => '😐', 3 => '😊', 4 => '😍');
-                    $total_rating = 0;
-                    $count = 0;
-                    foreach ($entries as $entry): 
-                        $total_rating += $entry['rating'];
-                        $count++;
-                    ?>
-                        <tr>
-                            <td><strong><?php echo esc_html($entry['dish_name']); ?></strong></td>
-                            <td>
-                                <span style="font-size: 24px;"><?php echo $rating_emoji[$entry['rating']] ?? $entry['rating']; ?></span>
-                                (<?php echo $entry['rating']; ?>/4)
-                            </td>
-                            <td><?php echo esc_html(date('d.m.Y H:i', strtotime($entry['created_at']))); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <th>Средняя оценка</th>
-                        <th>
-                            <strong><?php echo number_format($total_rating / $count, 2); ?></strong>
-                            <span style="font-size: 20px;">
-                                <?php 
-                                $avg = $total_rating / $count;
-                                if ($avg >= 3.5) echo '😍';
-                                elseif ($avg >= 2.5) echo '😊';
-                                elseif ($avg >= 1.5) echo '😐';
-                                else echo '😞';
-                                ?>
-                            </span>
-                        </th>
-                        <th></th>
-                    </tr>
-                </tfoot>
-            </table>
-        <?php else: ?>
-            <p>Оценки еще не получены.</p>
-        <?php endif; ?>
-        
-        <h2>Активности</h2>
-        <table class="form-table">
-            <tr>
-                <th>Поделился в Instagram</th>
-                <td><?php echo $request['shared_instagram'] ? '✅ Да' : '❌ Нет'; ?></td>
-            </tr>
-            <tr>
-                <th>Оставил отзыв в Google Maps</th>
-                <td><?php echo $request['shared_google'] ? '✅ Да' : '❌ Нет'; ?></td>
-            </tr>
-        </table>
-    </div>
-    <?php
-}
-
-// Функция для отображения всех кастомных опросов
-function gustolocal_display_all_custom_feedback_results() {
     global $wpdb;
-    $custom_requests_table = $wpdb->prefix . 'custom_feedback_requests';
     $custom_entries_table = $wpdb->prefix . 'custom_feedback_entries';
     
-    $requests = $wpdb->get_results(
-        "SELECT r.*, 
-                COUNT(e.id) as entries_count,
-                AVG(e.rating) as avg_rating
-         FROM $custom_requests_table r
-         LEFT JOIN $custom_entries_table e ON e.request_id = r.id
-         GROUP BY r.id
-         ORDER BY r.created_at DESC
-         LIMIT 100",
-        ARRAY_A
-    );
+    // Получаем статистику по блюдам из кастомных опросов
+    $dish_stats = $wpdb->get_results("
+        SELECT 
+            dish_name,
+            dish_unit,
+            COUNT(*) as total_reviews,
+            AVG(rating) as avg_rating,
+            SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as rating_4,
+            SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as rating_3,
+            SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as rating_2,
+            SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as rating_1
+        FROM $custom_entries_table
+        WHERE rating > 0
+        GROUP BY dish_name, dish_unit
+        ORDER BY avg_rating DESC, total_reviews DESC
+    ", ARRAY_A);
+    
+    // Последние опросы с отзывами
+    $custom_requests_table = $wpdb->prefix . 'custom_feedback_requests';
+    $recent_feedback = $wpdb->get_results("
+        SELECT 
+            r.id,
+            r.token,
+            r.client_name,
+            r.client_contact,
+            DATE_FORMAT(MAX(r.submitted_at), '%d.%m.%Y %H:%i') as last_date,
+            r.general_comment,
+            r.shared_instagram,
+            r.shared_google,
+            COUNT(e.id) as dishes_count,
+            ROUND(AVG(e.rating), 2) as avg_rating,
+            GROUP_CONCAT(
+                CONCAT(
+                    e.dish_name,
+                    IF(e.dish_unit != '', CONCAT(' (', e.dish_unit, ')'), ''),
+                    '::',
+                    e.rating
+                )
+                ORDER BY e.created_at DESC
+                SEPARATOR '||'
+            ) as dishes_list
+        FROM $custom_requests_table r
+        INNER JOIN $custom_entries_table e ON e.request_id = r.id
+        WHERE r.status = 'submitted' AND e.rating > 0
+        GROUP BY r.id, r.token, r.client_name, r.client_contact
+        ORDER BY MAX(r.submitted_at) DESC
+        LIMIT 50
+    ", ARRAY_A);
+    
+    $delete_nonce = wp_create_nonce('gustolocal_custom_feedback_delete');
     
     ?>
     <div class="wrap">
         <h1>Результаты кастомных опросов</h1>
-        <p><a href="<?php echo esc_url(admin_url('admin.php?page=gustolocal-feedback-results')); ?>" class="button">← Обычные отзывы</a></p>
         
+        <h2>Статистика по блюдам</h2>
+        <p class="description">Таблица автоматически группирует отзывы по названию блюда и единице измерения. Кликните на строку, чтобы увидеть все отзывы по этому блюду.</p>
+        
+        <table class="wp-list-table widefat fixed striped" id="custom-feedback-stats-table">
+            <thead>
+                <tr>
+                    <th>Блюдо</th>
+                    <th>Отзывов</th>
+                    <th>Средняя оценка</th>
+                    <th>😍</th>
+                    <th>😊</th>
+                    <th>😐</th>
+                    <th>😞</th>
+                    <th style="width: 100px;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($dish_stats)): ?>
+                    <?php foreach ($dish_stats as $stat): 
+                        $avg = round($stat['avg_rating'], 2);
+                        $dish_full = $stat['dish_name'] . ($stat['dish_unit'] ? ' (' . $stat['dish_unit'] . ')' : '');
+                    ?>
+                        <tr data-dish-name="<?php echo esc_attr($stat['dish_name']); ?>" data-dish-unit="<?php echo esc_attr($stat['dish_unit']); ?>">
+                            <td><strong><?php echo esc_html($dish_full); ?></strong></td>
+                            <td><?php echo esc_html($stat['total_reviews']); ?></td>
+                            <td>
+                                <strong><?php echo number_format($avg, 2); ?></strong>
+                                <span style="font-size: 20px;">
+                                    <?php 
+                                    if ($avg >= 3.5) echo '😍';
+                                    elseif ($avg >= 2.5) echo '😊';
+                                    elseif ($avg >= 1.5) echo '😐';
+                                    else echo '😞';
+                                    ?>
+                                </span>
+                            </td>
+                            <td><?php echo esc_html($stat['rating_4']); ?></td>
+                            <td><?php echo esc_html($stat['rating_3']); ?></td>
+                            <td><?php echo esc_html($stat['rating_2']); ?></td>
+                            <td><?php echo esc_html($stat['rating_1']); ?></td>
+                            <td>
+                                <button type="button" class="button button-small view-custom-details-btn" 
+                                        data-dish-name="<?php echo esc_attr($stat['dish_name']); ?>" 
+                                        data-dish-unit="<?php echo esc_attr($stat['dish_unit']); ?>">
+                                    Детали
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="8">Нет отзывов</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        
+        <h2>Последние комментарии и активности</h2>
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
-                    <th>Дата создания</th>
+                    <th>Дата</th>
                     <th>Клиент</th>
                     <th>Контакт</th>
-                    <th>Статус</th>
-                    <th>Оценок</th>
+                    <th>Блюд</th>
                     <th>Средняя</th>
+                    <th>Отзывы</th>
+                    <th>Комментарий</th>
                     <th>Instagram</th>
                     <th>Google</th>
                     <th>Действия</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (!empty($requests)): ?>
-                    <?php foreach ($requests as $request): 
-                        $rating_emoji = array(1 => '😞', 2 => '😐', 3 => '😊', 4 => '😍');
-                        $avg = $request['avg_rating'] ? floatval($request['avg_rating']) : 0;
-                    ?>
+                <?php if (!empty($recent_feedback)): ?>
+                    <?php foreach ($recent_feedback as $feedback): ?>
                         <tr>
-                            <td><?php echo esc_html(date('d.m.Y H:i', strtotime($request['created_at']))); ?></td>
-                            <td><strong><?php echo esc_html($request['client_name']); ?></strong></td>
-                            <td><?php echo esc_html($request['client_contact'] ?: '—'); ?></td>
+                            <td><?php echo esc_html($feedback['last_date']); ?></td>
+                            <td><?php echo esc_html($feedback['client_name']); ?></td>
+                            <td><?php echo esc_html($feedback['client_contact'] ?: '—'); ?></td>
+                            <td><?php echo esc_html($feedback['dishes_count']); ?></td>
+                            <td><?php echo esc_html(number_format((float) $feedback['avg_rating'], 2)); ?></td>
                             <td>
-                                <?php if ($request['status'] === 'submitted'): ?>
-                                    <span style="color: #46b450; font-weight: bold;">Заполнен</span>
-                                <?php else: ?>
-                                    <span style="color: #f56e28; font-weight: bold;">Ожидает</span>
-                                <?php endif; ?>
+                                <?php
+                                if (!empty($feedback['dishes_list'])) {
+                                    $items = explode('||', $feedback['dishes_list']);
+                                    foreach ($items as $item) {
+                                        list($name, $rating) = array_pad(explode('::', $item), 2, '');
+                                        $emoji = array('1' => '😞', '2' => '😐', '3' => '😊', '4' => '😍');
+                                        echo '<div>' . esc_html($name) . ': ' . ($emoji[$rating] ?? $rating) . '</div>';
+                                    }
+                                } else {
+                                    echo '—';
+                                }
+                                ?>
                             </td>
-                            <td><?php echo esc_html($request['entries_count']); ?></td>
+                            <td><?php echo $feedback['general_comment'] ? nl2br(esc_html($feedback['general_comment'])) : '—'; ?></td>
+                            <td><?php echo !empty($feedback['shared_instagram']) ? '✅' : '—'; ?></td>
+                            <td><?php echo !empty($feedback['shared_google']) ? '✅' : '—'; ?></td>
                             <td>
-                                <?php if ($avg > 0): ?>
-                                    <strong><?php echo number_format($avg, 2); ?></strong>
-                                    <span style="font-size: 16px;">
-                                        <?php 
-                                        if ($avg >= 3.5) echo '😍';
-                                        elseif ($avg >= 2.5) echo '😊';
-                                        elseif ($avg >= 1.5) echo '😐';
-                                        else echo '😞';
-                                        ?>
-                                    </span>
-                                <?php else: ?>
-                                    —
-                                <?php endif; ?>
-                            </td>
-                            <td><?php echo $request['shared_instagram'] ? '✅' : '—'; ?></td>
-                            <td><?php echo $request['shared_google'] ? '✅' : '—'; ?></td>
-                            <td>
-                                <a href="<?php echo esc_url(admin_url('admin.php?page=gustolocal-feedback-results&custom=1&token=' . $request['token'])); ?>" class="button button-small">
-                                    Детали
-                                </a>
+                                <button class="button delete-custom-feedback-btn" data-token="<?php echo esc_attr($feedback['token']); ?>">
+                                    Удалить
+                                </button>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="9">Кастомные опросы не найдены</td>
+                        <td colspan="10">Нет комментариев</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
+    
+    <style>
+    .feedback-modal {
+        display: none;
+        position: fixed;
+        z-index: 100000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.5);
+    }
+    .feedback-modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 800px;
+        max-height: 80vh;
+        overflow-y: auto;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .feedback-modal-close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .feedback-modal-close:hover {
+        color: #000;
+    }
+    .feedback-detail-item {
+        padding: 15px;
+        margin-bottom: 10px;
+        background: #f9f9f9;
+        border-left: 4px solid #0073aa;
+        border-radius: 4px;
+    }
+    </style>
+    
+    <div id="custom-feedback-modal" class="feedback-modal">
+        <div class="feedback-modal-content">
+            <span class="feedback-modal-close">&times;</span>
+            <h2 id="custom-modal-dish-name"></h2>
+            <div id="custom-modal-feedback-list"></div>
+        </div>
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var modal = document.getElementById('custom-feedback-modal');
+        var closeBtn = modal.querySelector('.feedback-modal-close');
+        var viewDetailsBtns = document.querySelectorAll('.view-custom-details-btn');
+        
+        viewDetailsBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var dishName = this.getAttribute('data-dish-name');
+                var dishUnit = this.getAttribute('data-dish-unit');
+                showCustomFeedbackDetails(dishName, dishUnit);
+            });
+        });
+        
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        };
+        
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        };
+        
+        function showCustomFeedbackDetails(dishName, dishUnit) {
+            document.getElementById('custom-modal-dish-name').textContent = dishName + (dishUnit ? ' (' + dishUnit + ')' : '');
+            document.getElementById('custom-modal-feedback-list').innerHTML = '<p>Загрузка...</p>';
+            modal.style.display = 'block';
+            
+            var formData = new FormData();
+            formData.append('action', 'get_custom_feedback_details');
+            formData.append('dish_name', dishName);
+            formData.append('dish_unit', dishUnit);
+            
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    var html = '';
+                    if (data.data.length === 0) {
+                        html = '<p>Нет детальных отзывов для этого блюда.</p>';
+                    } else {
+                        data.data.forEach(function(feedback) {
+                            var ratingEmoji = {'1': '😞', '2': '😐', '3': '😊', '4': '😍'};
+                            html += '<div class="feedback-detail-item">';
+                            html += '<div style="display: flex; align-items: center; margin-bottom: 10px;">';
+                            html += '<span class="rating" style="font-size: 24px; margin-right: 10px;">' + ratingEmoji[feedback.rating] + '</span>';
+                            html += '<strong>' + feedback.client_name + '</strong>';
+                            html += '<span style="margin-left: auto; color: #666; font-size: 12px;">' + feedback.date + '</span>';
+                            html += '</div>';
+                            if (feedback.general_comment) {
+                                html += '<p style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px;">' + escapeHtml(feedback.general_comment) + '</p>';
+                            }
+                            html += '</div>';
+                        });
+                    }
+                    document.getElementById('custom-modal-feedback-list').innerHTML = html;
+                } else {
+                    document.getElementById('custom-modal-feedback-list').innerHTML = '<p>Ошибка: ' + (data.data || 'Не удалось загрузить отзывы') + '</p>';
+                }
+            })
+            .catch(function(error) {
+                document.getElementById('custom-modal-feedback-list').innerHTML = '<p>Ошибка: ' + error + '</p>';
+            });
+        }
+        
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        document.querySelectorAll('.delete-custom-feedback-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var token = this.getAttribute('data-token');
+                if (!token) {
+                    return;
+                }
+                
+                if (!confirm('Удалить отзыв полностью? После удаления ссылка снова станет активной. Это действие нельзя отменить.')) {
+                    return;
+                }
+                
+                var formData = new FormData();
+                formData.append('action', 'gustolocal_delete_custom_feedback');
+                formData.append('token', token);
+                formData.append('nonce', '<?php echo esc_js($delete_nonce); ?>');
+                
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.data || 'Не удалось удалить отзыв');
+                    }
+                })
+                .catch(function() {
+                    alert('Ошибка при удалении отзыва');
+                });
+            });
+        });
+    });
+    </script>
     <?php
 }
+
