@@ -2210,14 +2210,15 @@ function gustolocal_get_customers_for_feedback($date_from = null, $date_to = nul
         'order' => 'DESC',
     );
     
-    // Если даты не указаны, используем вторник неделю назад по умолчанию
-    if (!$date_from || !$date_to) {
-        $last_tuesday = strtotime('last tuesday');
-        $date_from = date('Y-m-d 00:00:00', $last_tuesday);
-        $date_to = date('Y-m-d 23:59:59', $last_tuesday);
+    if ($date_from && !$date_to) {
+        $date_to = $date_from;
+    } elseif ($date_to && !$date_from) {
+        $date_from = $date_to;
     }
     
-    $orders_query['date_created'] = $date_from . '...' . $date_to;
+    if ($date_from && $date_to) {
+        $orders_query['date_created'] = $date_from . '...' . $date_to;
+    }
     
     if ($status_filter) {
         $orders_query['status'] = $status_filter;
@@ -3040,6 +3041,13 @@ function gustolocal_display_feedback_form($token, $order_id) {
         .share-icon {
             font-size: 18px;
         }
+        .share-button--google {
+            background: linear-gradient(120deg, #4285F4, #34A853, #FBBC05, #EA4335);
+            color: #fff;
+        }
+        .share-button--google .share-icon {
+            font-size: 16px;
+        }
         .submit-btn {
             width: 100%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -3135,6 +3143,10 @@ function gustolocal_display_feedback_form($token, $order_id) {
                             <span class="share-icon">↗️</span>
                             <span>Поделиться нашим Instagram</span>
                         </button>
+                        <a class="share-button share-button--google" href="https://maps.app.goo.gl/6rmjMdquG5vcVFry6" target="_blank" rel="noopener noreferrer">
+                            <span class="share-icon">★</span>
+                            <span>Оставить отзыв в Google Maps</span>
+                        </a>
                     </div>
                     
                     <button type="submit" class="submit-btn" id="submit-btn">
