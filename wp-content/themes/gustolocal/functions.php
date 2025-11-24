@@ -2165,6 +2165,7 @@ function gustolocal_create_feedback_table() {
         comment text DEFAULT '',
         general_comment text DEFAULT '',
         shared_instagram tinyint(1) DEFAULT 0,
+        shared_google tinyint(1) DEFAULT 0,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         KEY token (token),
@@ -2174,6 +2175,26 @@ function gustolocal_create_feedback_table() {
     
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
+}
+
+add_action('init', 'gustolocal_ensure_feedback_table_columns');
+function gustolocal_ensure_feedback_table_columns() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    $required_columns = array(
+        'shared_instagram' => "ALTER TABLE {$table_name} ADD COLUMN shared_instagram tinyint(1) DEFAULT 0",
+        'shared_google'    => "ALTER TABLE {$table_name} ADD COLUMN shared_google tinyint(1) DEFAULT 0",
+    );
+    
+    foreach ($required_columns as $column => $alter_sql) {
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SHOW COLUMNS FROM {$table_name} LIKE %s",
+            $column
+        ));
+        if (!$exists) {
+            $wpdb->query($alter_sql);
+        }
+    }
 }
 
 // Регистрация страницы управления опросами
@@ -2456,6 +2477,7 @@ function gustolocal_feedback_results_page() {
             DATE_FORMAT(MAX(f.created_at), '%d.%m.%Y %H:%i') as last_date,
             MAX(f.general_comment) as general_comment,
             MAX(f.shared_instagram) as shared_instagram,
+            MAX(f.shared_google) as shared_google,
             COUNT(*) as dishes_count,
             ROUND(AVG(f.rating), 2) as avg_rating,
             GROUP_CONCAT(
@@ -2713,6 +2735,7 @@ function gustolocal_feedback_results_page() {
                     <th>Отзывы</th>
                     <th>Комментарий</th>
                     <th>Instagram</th>
+                    <th>Google</th>
                     <th>Действия</th>
                 </tr>
             </thead>
@@ -2741,6 +2764,7 @@ function gustolocal_feedback_results_page() {
                             </td>
                             <td><?php echo $feedback['general_comment'] ? nl2br(esc_html($feedback['general_comment'])) : '—'; ?></td>
                             <td><?php echo !empty($feedback['shared_instagram']) ? '✅' : '—'; ?></td>
+                            <td><?php echo !empty($feedback['shared_google']) ? '✅' : '—'; ?></td>
                             <td>
                                 <button class="button delete-feedback-btn" data-token="<?php echo esc_attr($feedback['token']); ?>">
                                     Удалить
@@ -3130,6 +3154,8 @@ function gustolocal_display_feedback_form($token, $order_id) {
                     <input type="hidden" name="action" value="guest_feedback_submit">
                     <input type="hidden" name="token" value="<?php echo esc_attr($token); ?>">
                     <input type="hidden" name="order_id" value="<?php echo esc_attr($order_id); ?>">
+                    <input type="hidden" name="shared_instagram" id="shared-instagram-field" value="0">
+                    <input type="hidden" name="shared_google" id="shared-google-field" value="0">
                     
                     <?php foreach ($dishes as $dish_key => $dish_data): ?>
                         <div class="dish-item" data-dish="<?php echo esc_attr($dish_key); ?>">
@@ -3168,10 +3194,10 @@ function gustolocal_display_feedback_form($token, $order_id) {
                             <span class="share-icon">↗️</span>
                             <span>Поделиться нашим Instagram</span>
                         </button>
-                        <a class="share-button share-button--google" href="https://maps.app.goo.gl/6rmjMdquG5vcVFry6" target="_blank" rel="noopener noreferrer">
+                        <button type="button" class="share-button share-button--google" id="share-google-btn" onclick="shareGoogle()">
                             <span class="share-icon">★</span>
                             <span>Оставить отзыв в Google Maps</span>
-                        </a>
+                        </button>
                     </div>
                     
                     <button type="submit" class="submit-btn" id="submit-btn">
@@ -3287,6 +3313,7 @@ function gustolocal_display_feedback_form($token, $order_id) {
                     console.log('Ошибка при попытке поделиться:', error);
                     // Fallback: открываем Instagram в новой вкладке
                     window.open(instagramUrl, '_blank');
+                    trackShare();
                 });
             } else {
                 // Fallback для браузеров без поддержки Web Share API
@@ -3294,25 +3321,41 @@ function gustolocal_display_feedback_form($token, $order_id) {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(instagramUrl).then(function() {
                         alert('Ссылка на Instagram скопирована! Вставьте её в любое приложение.');
+                        markShare('share-btn', 'shared-instagram-field', 'Поделились');
                     }).catch(function() {
                         // Если не удалось скопировать, просто открываем
                         window.open(instagramUrl, '_blank');
+                        trackShare();
                     });
                 } else {
                     // Последний fallback: открываем Instagram
                     window.open(instagramUrl, '_blank');
+                    trackShare();
                 }
             }
         }
         
-        function trackShare() {
-            // Отмечаем, что пользователь поделился (можно отправить на сервер)
-            var shareBtn = document.getElementById('share-btn');
-            if (shareBtn) {
-                shareBtn.style.opacity = '0.7';
-                shareBtn.disabled = true;
-                shareBtn.innerHTML = '<span class="share-icon">✓</span><span>Поделились</span>';
+        function shareGoogle() {
+            var googleUrl = 'https://maps.app.goo.gl/6rmjMdquG5vcVFry6';
+            markShare('share-google-btn', 'shared-google-field', 'Отзыв отправлен');
+            window.open(googleUrl, '_blank');
+        }
+        
+        function markShare(buttonId, fieldId, successText) {
+            var field = document.getElementById(fieldId);
+            if (field) {
+                field.value = '1';
             }
+            var btn = document.getElementById(buttonId);
+            if (btn) {
+                btn.style.opacity = '0.7';
+                btn.disabled = true;
+                btn.innerHTML = '<span class="share-icon">✓</span><span>' + successText + '</span>';
+            }
+        }
+        
+        function trackShare() {
+            markShare('share-btn', 'shared-instagram-field', 'Поделились');
         }
         </script>
     </body>
@@ -3348,7 +3391,8 @@ function gustolocal_handle_feedback_submit() {
     }
     
     $general_comment = sanitize_textarea_field($_POST['general_comment'] ?? '');
-    $shared_instagram = isset($_POST['shared_instagram']) ? 1 : 0;
+    $shared_instagram = !empty($_POST['shared_instagram']) ? 1 : 0;
+    $shared_google = !empty($_POST['shared_google']) ? 1 : 0;
     
     if (empty($token) || empty($order_id) || empty($ratings)) {
         wp_send_json_error('Неверные данные: токен, заказ или оценки отсутствуют');
@@ -3397,8 +3441,9 @@ function gustolocal_handle_feedback_submit() {
                 'rating' => $rating,
                 'general_comment' => '', // Общий комментарий сохраним отдельно
                 'shared_instagram' => 0,
+                'shared_google' => 0,
             ),
-            array('%s', '%d', '%s', '%s', '%s', '%d', '%s', '%d')
+            array('%s', '%d', '%s', '%s', '%s', '%d', '%s', '%d', '%d')
         );
         
         if ($result === false) {
@@ -3425,9 +3470,10 @@ function gustolocal_handle_feedback_submit() {
                 array(
                     'general_comment' => $general_comment,
                     'shared_instagram' => $shared_instagram,
+                    'shared_google' => $shared_google,
                 ),
                 array('id' => $first_feedback_id),
-                array('%s', '%d'),
+                array('%s', '%d', '%d'),
                 array('%d')
             );
         }
