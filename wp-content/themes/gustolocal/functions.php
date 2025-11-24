@@ -2452,17 +2452,25 @@ function gustolocal_feedback_results_page() {
         ORDER BY avg_rating DESC, total_reviews DESC
     ", ARRAY_A);
     
-    // Получаем последние отзывы с комментариями
+    // Последние заказы с отзывами (включая те, где нет комментариев)
     $recent_feedback = $wpdb->get_results("
         SELECT 
-            f.*,
-            o.post_date as order_date
+            MIN(f.id) as id,
+            f.token,
+            f.order_id,
+            f.customer_name,
+            DATE_FORMAT(MAX(f.created_at), '%d.%m.%Y %H:%i') as last_date,
+            MAX(f.general_comment) as general_comment,
+            MAX(f.shared_instagram) as shared_instagram,
+            COUNT(*) as dishes_count,
+            ROUND(AVG(f.rating), 2) as avg_rating
         FROM $table_name f
-        LEFT JOIN {$wpdb->posts} o ON f.order_id = o.ID
-        WHERE f.general_comment != '' OR f.shared_instagram = 1
-        ORDER BY f.created_at DESC
+        GROUP BY f.token, f.order_id, f.customer_name
+        ORDER BY MAX(f.created_at) DESC
         LIMIT 50
     ", ARRAY_A);
+    
+    $delete_nonce = wp_create_nonce('gustolocal_feedback_delete');
     
     ?>
     <div class="wrap">
@@ -2652,6 +2660,40 @@ function gustolocal_feedback_results_page() {
                 div.textContent = text;
                 return div.innerHTML;
             }
+            
+            document.querySelectorAll('.delete-feedback-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token = this.getAttribute('data-token');
+                    if (!token) {
+                        return;
+                    }
+                    
+                    if (!confirm('Удалить отзыв полностью? Это действие нельзя отменить.')) {
+                        return;
+                    }
+                    
+                    var formData = new FormData();
+                    formData.append('action', 'gustolocal_delete_feedback');
+                    formData.append('token', token);
+                    formData.append('nonce', '<?php echo esc_js($delete_nonce); ?>');
+                    
+                    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            window.location.reload();
+                        } else {
+                            alert(data.data || 'Не удалось удалить отзыв');
+                        }
+                    })
+                    .catch(function() {
+                        alert('Ошибка при удалении отзыва');
+                    });
+                });
+            });
         });
         </script>
         
@@ -2662,23 +2704,34 @@ function gustolocal_feedback_results_page() {
                     <th>Дата</th>
                     <th>Клиент</th>
                     <th>Заказ</th>
+                    <th>Блюд</th>
+                    <th>Средняя</th>
                     <th>Комментарий</th>
-                    <th>Поделились в Instagram</th>
+                    <th>Instagram</th>
+                    <th>Действия</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($recent_feedback as $feedback): ?>
+                <?php if (!empty($recent_feedback)): ?>
+                    <?php foreach ($recent_feedback as $feedback): ?>
+                        <tr>
+                            <td><?php echo esc_html($feedback['last_date']); ?></td>
+                            <td><?php echo esc_html($feedback['customer_name']); ?></td>
+                            <td>#<?php echo esc_html($feedback['order_id']); ?></td>
+                            <td><?php echo esc_html($feedback['dishes_count']); ?></td>
+                            <td><?php echo esc_html(number_format((float) $feedback['avg_rating'], 2)); ?></td>
+                            <td><?php echo $feedback['general_comment'] ? nl2br(esc_html($feedback['general_comment'])) : '—'; ?></td>
+                            <td><?php echo !empty($feedback['shared_instagram']) ? '✅' : '—'; ?></td>
+                            <td>
+                                <button class="button delete-feedback-btn" data-token="<?php echo esc_attr($feedback['token']); ?>">
+                                    Удалить
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
                     <tr>
-                        <td><?php echo esc_html(date('d.m.Y H:i', strtotime($feedback['created_at']))); ?></td>
-                        <td><?php echo esc_html($feedback['customer_name']); ?></td>
-                        <td>#<?php echo esc_html($feedback['order_id']); ?></td>
-                        <td><?php echo esc_html($feedback['general_comment']); ?></td>
-                        <td><?php echo $feedback['shared_instagram'] ? '✅ Да' : '—'; ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (empty($recent_feedback)): ?>
-                    <tr>
-                        <td colspan="5">Нет комментариев</td>
+                        <td colspan="8">Нет комментариев</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -3160,6 +3213,10 @@ function gustolocal_display_feedback_form($token, $order_id) {
                 })
                 .then(function(data) {
                     if (data.success) {
+                        var header = document.querySelector('.feedback-header');
+                        if (header) {
+                            header.remove();
+                        }
                         form.innerHTML = '<div class="success-message"><h2>✅ Спасибо!</h2><p>Ваш отзыв сохранен. Мы ценим ваше мнение!</p></div>';
                     } else {
                         var errorMsg = data.data || 'Не удалось сохранить отзыв';
@@ -3428,5 +3485,33 @@ function gustolocal_get_feedback_details() {
     }
     
     wp_send_json_success($result);
+}
+
+add_action('wp_ajax_gustolocal_delete_feedback', 'gustolocal_delete_feedback');
+function gustolocal_delete_feedback() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Доступ запрещен');
+    }
+    
+    check_ajax_referer('gustolocal_feedback_delete', 'nonce');
+    
+    $token = sanitize_text_field($_POST['token'] ?? '');
+    if (empty($token)) {
+        wp_send_json_error('Токен не указан');
+    }
+    
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'dish_feedback';
+    
+    $deleted = $wpdb->query($wpdb->prepare(
+        "DELETE FROM $table_name WHERE token = %s",
+        $token
+    ));
+    
+    if ($deleted === false) {
+        wp_send_json_error('Ошибка удаления: ' . $wpdb->last_error);
+    }
+    
+    wp_send_json_success(array('deleted' => $deleted));
 }
 
