@@ -1,0 +1,98 @@
+{
+  "version": 3,
+  "settings": {
+    "appearanceTools": true,
+    "color": {
+      "duotone": [],
+      "palette": [
+        { "name": "Background", "slug": "background", "color": "#f8f8f6" },
+        { "name": "Surface", "slug": "surface", "color": "#ffffff" },
+        { "name": "Primary", "slug": "primary", "color": "#17815e" },
+        { "name": "Primary Dark", "slug": "primary-dark", "color": "#0f5c43" },
+        { "name": "Accent", "slug": "accent", "color": "#f5a623" },
+        { "name": "Text", "slug": "text", "color": "#1a1a1a" },
+        { "name": "Muted", "slug": "muted", "color": "#4a4a4a" }
+      ]
+    },
+    "layout": {
+      "contentSize": "1200px",
+      "wideSize": "1200px"
+    },
+    "spacing": {
+      "units": [ "px", "%", "em", "rem", "vh", "vw" ]
+    },
+    "typography": {
+      "dropCap": false,
+      "fontFamilies": [
+        {
+          "fontFamily": "Inter, Nunito, Segoe UI, Roboto, -apple-system, BlinkMacSystemFont, sans-serif",
+          "name": "Inter",
+          "slug": "inter"
+        }
+      ],
+      "fluid": true,
+      "fontSizes": [
+        { "slug": "xs", "size": "0.875rem", "name": "XS" },
+        { "slug": "sm", "size": "1rem", "name": "Small" },
+        { "slug": "base", "size": "1.125rem", "name": "Base" },
+        { "slug": "lg", "size": "1.35rem", "name": "Large" },
+        { "slug": "xl", "size": "1.6rem", "name": "XL" },
+        { "slug": "2xl", "size": "2.2rem", "name": "2XL" },
+        { "slug": "3xl", "size": "2.85rem", "name": "3XL" }
+      ],
+      "lineHeight": "1.6"
+    }
+  },
+  "styles": {
+    "color": {
+      "background": "var(--gl-color-background)",
+      "text": "var(--gl-color-text)"
+    },
+    "elements": {
+      "heading": {
+        "typography": {
+          "fontFamily": "var(--wp--preset--font-family--inter)",
+          "fontWeight": "700",
+          "lineHeight": "1.2"
+        },
+        "color": {
+          "text": "var(--gl-color-text)"
+        }
+      },
+      "link": {
+        "color": {
+          "text": "var(--gl-color-primary)"
+        }
+      }
+    },
+    "typography": {
+      "fontFamily": "var(--wp--preset--font-family--inter)",
+      "fontSize": "var(--wp--preset--font-size--base)",
+      "lineHeight": "1.6"
+    }
+  },
+  "templateParts": [
+    {
+      "name": "header",
+      "title": "Header",
+      "area": "header"
+    },
+    {
+      "name": "footer",
+      "title": "Footer",
+      "area": "footer"
+    }
+  ],
+  "templates": {
+    "index": "templates/index.html",
+    "page": "templates/page.html",
+    "front-page": "templates/front-page.html"
+  },
+  "customTemplates": [
+    {
+      "name": "page-rico",
+      "title": "Rico Page",
+      "postTypes": [ "page" ]
+    }
+  ]
+}

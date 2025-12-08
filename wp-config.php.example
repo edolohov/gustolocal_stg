@@ -1,0 +1,51 @@
+<?php
+/**
+ * WordPress Staging Configuration
+ * staging.gustolocal.es
+ * 
+ * Скопируйте этот файл в wp-config.php и настройте под ваше окружение
+ */
+
+// База данных
+define('DB_NAME', 'u850527203_stg');
+define('DB_USER', 'u850527203_stg');
+define('DB_PASSWORD', 'hiLKov15!');
+define('DB_HOST', 'localhost');
+define('DB_CHARSET', 'utf8mb4');
+define('DB_COLLATE', '');
+
+// Префикс таблиц (обычно wp_)
+$table_prefix = 'wp_';
+
+// URLs
+define('WP_HOME', 'https://staging.gustolocal.es');
+define('WP_SITEURL', 'https://staging.gustolocal.es');
+
+// Отладка (включена для staging)
+define('WP_DEBUG', true);
+define('WP_DEBUG_LOG', true);
+define('WP_DEBUG_DISPLAY', false);
+define('SCRIPT_DEBUG', true);
+
+// Безопасность
+define('DISALLOW_FILE_EDIT', false); // Разрешаем редактирование для тестирования
+define('AUTOSAVE_INTERVAL', 300);
+define('WP_POST_REVISIONS', 5);
+
+// Отключаем автоматические обновления (чтобы не сломать тестирование)
+define('AUTOMATIC_UPDATER_DISABLED', true);
+define('WP_AUTO_UPDATE_CORE', false);
+
+// Кеширование (отключаем для staging)
+define('WP_CACHE', false);
+
+// Ограничение доступа (опционально - можно включить пароль на staging)
+// define('STAGING_PASSWORD', 'ваш_пароль');
+
+// Остальные настройки WordPress
+if (!defined('ABSPATH')) {
+    define('ABSPATH', __DIR__ . '/');
+}
+
+require_once ABSPATH . 'wp-settings.php';
+

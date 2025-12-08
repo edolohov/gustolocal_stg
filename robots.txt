@@ -1,0 +1,4 @@
+# Staging Environment - DO NOT INDEX
+User-agent: *
+Disallow: /
+

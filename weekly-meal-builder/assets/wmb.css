@@ -1,0 +1,1168 @@
+/* ============ Layout ============ */
+/* Убираем overflow-x:hidden который ломает sticky */
+html,body{overflow-x:hidden}
+html,body{overflow:visible !important}
+/* Убеждаемся что viewport правильно настроен для мобильных */
+@supports (width: 100vw) {
+  html {
+    width: 100%;
+    max-width: 100vw;
+  }
+  body {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+}
+#meal-builder-root{
+  padding-left:12px;
+  padding-right:12px;
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+}
+@supports (padding: max(0px)){
+  #meal-builder-root{padding-left:max(12px, env(safe-area-inset-left));padding-right:max(12px, env(safe-area-inset-right))}
+}
+
+/* Hard override against theme wrappers on small screens */
+@media (max-width:768px){
+  body .wp-site-blocks #meal-builder-root,
+  body #meal-builder-root{
+    padding-left:max(16px, env(safe-area-inset-left)) !important;
+    padding-right:max(16px, env(safe-area-inset-right)) !important;
+    margin-left:auto; margin-right:auto;
+  }
+  /* Убираем паддинги у wmb-wrapper на мобиле тоже */
+  body .wp-site-blocks #meal-builder-root .wmb-wrapper,
+  body #meal-builder-root .wmb-wrapper{
+    padding-left:0 !important;
+    padding-right:0 !important;
+  }
+}
+#wmb *{box-sizing:border-box}
+.wmb-wrapper{
+  max-width:1200px;
+  margin:0 auto;
+  padding:0;
+  overflow: visible !important;
+  position: relative !important;
+  min-height: 100vh !important; /* КРИТИЧНО для работы sticky */
+}
+@supports(padding:max(0px)){
+  .wmb-wrapper{padding-left:0;padding-right:0}
+}
+.wmb-tabs{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+.wmb-tab{
+  background: none;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+.wmb-tab:hover{
+  color: #2d5a3d;
+  background-color: #f5f5f5;
+}
+.wmb-tab.wmb-tab-active{
+  color: #2d5a3d;
+  border-bottom-color: #2d5a3d;
+  font-weight: 600;
+}
+@media (max-width: 768px){
+  .wmb-tabs{
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .wmb-tabs::-webkit-scrollbar{
+    display: none;
+  }
+  .wmb-tab{
+    padding: 10px 16px;
+    font-size: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+.wmb-header{margin:12px 0 16px}
+.wmb-sub{display:none}
+/* Баннер доставки полностью удален */
+.wmb-banner{display:none !important}
+.wmb-banner strong{color:#2d5a3d;font-weight:700}
+.wmb-banner em{color:#e74c3c;font-weight:700;font-style:normal}
+
+/* Индикатор товара в корзине */
+.wmb-card-in-cart{
+  border: 2px solid #4caf50 !important;
+  background-color: #f8fff8 !important;
+}
+.wmb-in-cart-badge{
+  display: inline-block;
+  background: #4caf50;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Текст из редактора страницы (абзацы/заголовки) перед билдером */
+#meal-builder-root + .wmb-wrapper, .wmb-wrapper{max-width:1200px}
+.wmb-page-intro{max-width:1200px;margin:0 auto;padding:0 16px}
+@supports(padding:max(0px)){.wmb-page-intro{padding-left:max(16px, env(safe-area-inset-left));padding-right:max(16px, env(safe-area-inset-right))}}
+.wmb-page-intro p{font-size:18px;color:#333;opacity:.9;margin:6px 0 10px}
+.wmb-page-intro a{color:#1976d2;text-decoration:underline}
+
+/* Унификация ширины и отступов текста страницы там, где есть билдер */
+body:has(#meal-builder-root) .wp-block-post-content{
+  max-width:1200px;
+  margin:0 auto !important;
+  padding-left:16px !important;
+  padding-right:16px !important;
+}
+@supports(padding:max(0px)){
+  body:has(#meal-builder-root) .wp-block-post-content{
+    padding-left:max(16px, env(safe-area-inset-left));
+    padding-right:max(16px, env(safe-area-inset-right));
+  }
+}
+body:has(#meal-builder-root) .wp-block-post-content p{
+  font-size:18px;
+  color:#333;
+  opacity:.9;
+  margin:6px 0 10px;
+}
+
+/* Жесткое выравнивание WP-групп-контейнеров на страницах с билдером */
+body:has(#meal-builder-root) .has-global-padding.is-layout-constrained{
+  max-width:1200px !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+  padding-left:16px !important;
+  padding-right:16px !important;
+}
+@supports(padding:max(0px)){
+  body:has(#meal-builder-root) .has-global-padding.is-layout-constrained{
+    padding-left:max(16px, env(safe-area-inset-left)) !important;
+    padding-right:max(16px, env(safe-area-inset-right)) !important;
+  }
+}
+
+/* Принудительное выравнивание всех первых блоков контента относительно билдера */
+body:has(#meal-builder-root) .wp-block-post-content > *:not(#meal-builder-root){
+  max-width:1200px !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
+  padding-left:16px !important;
+  padding-right:16px !important;
+}
+@supports(padding:max(0px)){
+  body:has(#meal-builder-root) .wp-block-post-content > *:not(#meal-builder-root){
+    padding-left:max(16px, env(safe-area-inset-left)) !important;
+    padding-right:max(16px, env(safe-area-inset-right)) !important;
+  }
+}
+
+/* Снижаем межабзацные отступы и убираем верхний отступ у первого абзаца */
+body:has(#meal-builder-root) .wp-block-post-content > p:first-of-type{ margin-top:0 !important; }
+body:has(#meal-builder-root) .wp-block-post-content > p{ margin:6px 0 10px !important; line-height:1.5; }
+
+/* Filters */
+.wmb-filters{display:flex;gap:20px;flex-wrap:wrap;margin:10px 0 18px}
+.wmb-filter-group{display:flex;flex-direction:column;gap:8px}
+.wmb-filter-title{font-weight:600}
+.wmb-chips{display:flex;flex-wrap:wrap;gap:8px}
+.wmb-chip{padding:8px 12px;border-radius:999px;background:#fff;border:1px solid #e6e6ef;cursor:pointer}
+.wmb-chip.is-active{background:#3535ff0f;border-color:#b9b9ff}
+.wmb-chip:disabled{opacity:.5;cursor:default}
+.wmb-chip-reset{color:#777}
+
+/* Body - исправлен для sticky */
+.wmb-body{
+  display:grid;
+  grid-template-columns:1fr 320px;
+  gap:24px;
+  align-items:start;
+  overflow: visible !important;
+  min-height: 100vh !important; /* КРИТИЧНО для работы sticky */
+  position: relative !important;
+}
+@media (max-width: 980px){ 
+  .wmb-body{
+    grid-template-columns:1fr;
+    overflow: visible !important;
+    min-height: auto !important;
+  } 
+}
+
+/* Catalog */
+.wmb-section{margin:12px 0 24px}
+.wmb-section-title{font-size:28px;margin:0 0 10px}
+.wmb-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:20px;
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+  /* Критично: предотвращаем вылезание карточек */
+  min-width:0;
+  align-items:stretch; /* Растягиваем карточки на всю высоту ряда */
+  /* Убираем grid-auto-rows:1fr - используем align-items:stretch вместо этого */
+}
+.wmb-grid > *{
+  min-width:0;
+  max-width:100%;
+  /* Критично: ограничиваем ширину элементов grid */
+  width:100%;
+}
+@media (min-width: 1400px){ 
+  .wmb-grid{
+    grid-template-columns:repeat(3,1fr);
+  } 
+}
+@media (max-width: 1200px){ 
+  .wmb-grid{
+    grid-template-columns:repeat(2,1fr);
+  } 
+}
+@media (max-width: 900px){ 
+  .wmb-grid{
+    grid-template-columns:repeat(2,1fr);
+    gap:16px;
+  } 
+}
+@media (max-width: 560px){ 
+  .wmb-grid{
+    grid-template-columns:1fr;
+    gap:12px;
+  } 
+}
+
+/* Card */
+.wmb-card{
+  background:#fff;
+  border:1px solid #eee;
+  border-radius:16px;
+  overflow:hidden !important; /* Нужно для обрезки содержимого - критично! */
+  display:flex;
+  flex-direction:column;
+  transition:all 0.2s ease;
+  /* Убираем height:100% - grid сам растянет через align-items:stretch */
+  max-width:100% !important;
+  width:100% !important;
+  box-sizing:border-box !important;
+  /* Обеспечиваем одинаковую высоту карточек через flex */
+  min-height:0;
+  /* Критично: предотвращаем вылезание содержимого */
+  position:relative;
+  /* Критично: создаем новый контекст наложения для правильной работы overflow */
+  isolation:isolate;
+  transform:translateZ(0);
+  -webkit-transform:translateZ(0);
+  /* Критично: обрезаем все что вылезает */
+  contain:layout style paint;
+  /* Критично: ограничиваем все дочерние элементы */
+  clip-path:inset(0);
+}
+.wmb-card:hover{
+  box-shadow:0 4px 12px rgba(0,0,0,.08);
+  transform:translateY(-2px);
+}
+.wmb-card-image{
+  width:100% !important;
+  max-width:100% !important;
+  height:200px !important;
+  min-height:200px !important;
+  max-height:200px !important;
+  overflow:hidden !important;
+  background:#f5f5f5;
+  position:relative !important;
+  flex-shrink:0 !important; /* Не сжимается */
+  flex-grow:0 !important; /* Не растягивается */
+  /* Скругляем верхние углы - важно для визуального эффекта */
+  border-radius:16px 16px 0 0;
+  box-sizing:border-box !important;
+  /* Дополнительная защита от вылезания */
+  min-width:0 !important;
+  /* Критично: изолируем содержимое для правильной работы overflow */
+  isolation:isolate;
+  /* Критично: создаем новый контекст наложения */
+  transform:translateZ(0);
+  -webkit-transform:translateZ(0);
+  /* Критично: ограничиваем размеры */
+  contain:layout style paint;
+  /* Критично: обрезаем все что вылезает */
+  clip-path:inset(0);
+  /* Критично: z-index для правильного наложения */
+  z-index:1;
+}
+.wmb-card-image img{
+  /* Критично: абсолютное позиционирование для точного контроля */
+  position:absolute !important;
+  top:0 !important;
+  left:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  object-fit:cover !important;
+  object-position:center !important;
+  display:block !important;
+  cursor:pointer;
+  transition:transform 0.3s ease;
+  /* Критично для предотвращения вылезания */
+  box-sizing:border-box !important;
+  border:none !important;
+  padding:0 !important;
+  margin:0 !important;
+  /* Убеждаемся что изображение не выходит за скругленные углы */
+  border-radius:16px 16px 0 0;
+  /* Критично: ограничиваем изображение границами контейнера */
+  contain:layout style paint;
+  /* Критично: обрезаем все что вылезает */
+  clip-path:inset(0);
+  /* Критично: z-index внутри контейнера */
+  z-index:1;
+}
+.wmb-card-image:hover img{
+  transform:scale(1.05);
+  /* При hover тоже не должно вылезать - overflow:hidden на родителе это предотвратит */
+  transform-origin:center center;
+}
+.wmb-card-content{
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  flex:1;
+  gap:8px;
+  min-width:0; /* Позволяет flex-элементам сжиматься */
+}
+.wmb-card-title{
+  font-weight:700;
+  font-size:18px;
+  line-height:1.4;
+  margin-bottom:4px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  /* Ограничиваем высоту названия для выравнивания карточек */
+  min-height:2.8em; /* Примерно 2 строки для названия */
+}
+/* Текст названия - занимает всю ширину и переносится */
+.wmb-card-title-text{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  word-break:break-word;
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  hyphens:auto;
+  line-height:1.4;
+  width:100%; /* Занимает всю доступную ширину */
+  max-height:2.8em; /* Максимум 2 строки */
+  font-weight:700;
+  font-size:18px;
+}
+/* Бейдж "В корзине" - под названием */
+.wmb-in-cart-badge{
+  display: inline-block;
+  background: #4caf50;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  align-self: flex-start; /* Выравниваем по левому краю */
+  margin-top: 2px; /* Небольшой отступ сверху */
+}
+.wmb-card-buttons{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:0; /* Убираем отступ сверху, так как gap уже есть */
+  width:100%;
+}
+.wmb-card-buttons .wmb-ing-btn{
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid #4a90e2;
+  background:#e3f2fd;
+  color:#1976d2;
+  cursor:pointer;
+  font-weight:500;
+  transition:all 0.2s ease;
+  white-space:nowrap;
+}
+.wmb-card-buttons .wmb-ing-btn:hover{
+  background:#bbdefb;
+  border-color:#1976d2;
+}
+.wmb-card-buttons .wmb-allergens-btn{
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid #f57c00;
+  background:#fff3e0;
+  color:#e65100;
+  cursor:pointer;
+  font-weight:500;
+  transition:all 0.2s ease;
+  white-space:nowrap;
+}
+.wmb-card-buttons .wmb-allergens-btn:hover{
+  background:#ffcc02;
+  border-color:#f57c00;
+}
+.wmb-card-meta{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  margin-bottom:4px;
+  font-size:16px;
+  font-weight:600;
+  color:#2d5a3d;
+  flex-wrap:wrap; /* Переносим на новую строку если не хватает места */
+  min-height:1.5em; /* Минимальная высота для выравнивания */
+}
+.wmb-unit{
+  color:#666;
+  font-size:14px;
+  font-weight:400;
+}
+.wmb-card-nutrition{
+  font-size:13px;
+  color:#666;
+  padding:6px 10px;
+  background:#f8f9fa;
+  border-radius:8px;
+  margin:4px 0;
+  line-height:1.4;
+}
+.wmb-card-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin:4px 0 6px;
+  /* Фиксируем минимальную высоту для выравнивания */
+  min-height:24px; /* Примерно одна строка тегов */
+}
+.wmb-tag{
+  padding:4px 10px;
+  border-radius:999px;
+  background:#f6f6fb;
+  border:1px solid #e6e6ef;
+  font-size:12px;
+  color:#666;
+  white-space:nowrap;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+/* Бейдж срока хранения */
+.wmb-card-shelf-life{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 12px;
+  border-radius:8px;
+  background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border:1px solid #81c784;
+  font-size:12px;
+  font-weight:600;
+  color:#2e7d32;
+  margin:4px 0 6px;
+  white-space:nowrap;
+}
+.wmb-card-shelf-life::before{
+  content:"⏱";
+  font-size:14px;
+  line-height:1;
+}
+/* Glovo/Uber карточки */
+.wmb-card-glovo-uber{
+  border: 2px solid #e0e0e0;
+}
+.wmb-glovo-uber-intro{
+  margin-bottom: 32px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  color: #666;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.wmb-glovo-uber-main-buttons{
+  display: flex;
+  gap: 16px;
+  margin-top: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.wmb-glovo-uber-links{
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.wmb-external-link{
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 140px;
+}
+.wmb-glovo-uber-main-buttons .wmb-external-link{
+  padding: 14px 32px;
+  font-size: 16px;
+  min-width: 200px;
+  flex: 0 1 auto;
+}
+.wmb-glovo-link{
+  background: #00a082;
+  color: white;
+}
+.wmb-glovo-link:hover{
+  background: #008f75;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,160,130,0.3);
+}
+.wmb-uber-link{
+  background: #000000;
+  color: white;
+}
+.wmb-uber-link:hover{
+  background: #333333;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+@media (max-width: 560px){
+  .wmb-external-link{
+    flex: 1 1 100%;
+  }
+  .wmb-glovo-uber-main-buttons{
+    flex-direction: column;
+  }
+  .wmb-glovo-uber-main-buttons .wmb-external-link{
+    width: 100%;
+    min-width: auto;
+  }
+}
+/* Исправление верстки для длинных текстов */
+.wmb-card{
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  /* Критично: предотвращаем вылезание содержимого */
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.wmb-card-title{
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  min-width:0;
+  flex:1;
+}
+.wmb-card-tags .wmb-tag{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  display:inline-block;
+}
+/* Ограничение длины тегов на мобилке */
+@media (max-width: 560px){
+  .wmb-card-tags .wmb-tag{
+    max-width:calc(50% - 3px);
+    font-size:11px;
+    padding:3px 8px;
+  }
+}
+/* Дополнительная защита от вылезания фото */
+.wmb-grid .wmb-card{
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+  /* Критично: обрезаем все что вылезает */
+  clip-path:inset(0);
+}
+.wmb-card-image,
+.wmb-card-image *{
+  max-width:100% !important;
+  box-sizing:border-box !important;
+  /* Критично: обрезаем все что вылезает */
+  overflow:hidden !important;
+}
+.wmb-card-image img{
+  /* Критично: ограничиваем изображение границами контейнера даже при transform */
+  will-change:transform;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  /* Критично: обрезаем все что вылезает */
+  clip-path:inset(0) !important;
+}
+/* Агрессивная защита от вылезания на всех уровнях */
+.wmb-section,
+.wmb-catalog,
+.wmb-wrapper,
+#meal-builder-root{
+  overflow-x:hidden !important;
+  overflow-y:visible !important;
+  max-width:100% !important;
+  /* Критично: обрезаем все что вылезает по горизонтали */
+  clip-path:inset(0);
+}
+.wmb-card *{
+  max-width:100% !important;
+  box-sizing:border-box !important;
+  /* Критично: все дочерние элементы не должны вылезать */
+  overflow:hidden !important;
+}
+/* Критично: исключаем текстовые элементы из overflow:hidden */
+.wmb-card-content,
+.wmb-card-title,
+.wmb-card-meta,
+.wmb-card-nutrition,
+.wmb-card-tags,
+.wmb-card-shelf-life,
+.wmb-qty{
+  overflow:visible !important;
+}
+.wmb-allergens{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:6px 0 10px;
+}
+.wmb-allergen{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid #e6e6ef;
+  font-size:.9rem;
+}
+.wmb-allergen i{font-style:normal;opacity:.8}
+
+/* Адаптивность карточек */
+@media (max-width: 560px){
+  .wmb-card-image{
+    height:180px;
+  }
+  .wmb-card-title{
+    font-size:16px;
+  }
+  .wmb-card-content{
+    padding:12px;
+  }
+  .wmb-card-meta{
+    font-size:15px;
+  }
+}
+
+/* Исправление вылезания фото за границы */
+.wmb-card{
+  max-width:100%;
+  box-sizing:border-box;
+}
+.wmb-grid{
+  width:100%;
+  box-sizing:border-box;
+}
+
+/* Qty */
+.wmb-qty{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:auto; /* Прижимаем к низу карточки */
+  padding-top:8px;
+  border-top:1px solid #f0f0f0;
+  flex-shrink:0; /* Не сжимается */
+}
+.wmb-qty button{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  border:1px solid #ddd;
+  background:#fff;
+  font-size:18px;
+  cursor:pointer;
+  transition:all 0.2s ease;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.wmb-qty button:hover:not(:disabled){
+  background:#f5f5f5;
+  border-color:#bbb;
+}
+.wmb-qty button:disabled{
+  opacity:.5;
+  cursor:default;
+}
+.wmb-qty-value{
+  min-width:24px;
+  text-align:center;
+  font-weight:600;
+  font-size:16px;
+}
+
+/* Sidebar - исправлен sticky */
+.wmb-sidebar{
+  position: -webkit-sticky;
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  height: fit-content;
+  z-index: 100;
+}
+@media (min-width:769px){
+  .wmb-sidebar{
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 24px !important;
+    align-self: start !important;
+    height: fit-content !important;
+    z-index: 100 !important;
+  }
+}
+.wmb-summary{background:#fff;border:1px solid #eee;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.wmb-summary-row{display:flex;align-items:center;justify-content:space-between}
+.wmb-checkout-btn{width:100%;padding:12px 14px;border:0;border-radius:10px;background:#7b66ff;color:#fff;font-weight:700;cursor:pointer;margin-top:4px}
+.wmb-checkout-btn:disabled{opacity:.5;cursor:default}
+.wmb-clear-cart-btn{
+  width: 100%;
+  padding: 10px 14px;
+  margin-top: 8px;
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.wmb-clear-cart-btn:hover:not(:disabled){
+  background: #e8e8e8;
+  border-color: #ccc;
+  color: #333;
+}
+.wmb-clear-cart-btn:disabled{
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sticky checkout for mobile */
+.wmb-sticky{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  width:100%;
+  box-sizing:border-box;
+  display:none;
+  flex-direction:row;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  background:#fff;
+  border-top:1px solid #eee;
+  padding:12px;
+  z-index:9999;
+  box-shadow:0 -4px 10px rgba(0,0,0,.06);
+  padding-bottom:calc(12px + env(safe-area-inset-bottom));
+  padding-left:calc(12px + env(safe-area-inset-left));
+  padding-right:calc(12px + env(safe-area-inset-right));
+  /* Критично: предотвращаем обрезку текста */
+  overflow:visible;
+  min-height:auto;
+  flex-wrap:wrap;
+}
+/* Блок с ценой - первый div */
+.wmb-sticky > div:first-child{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  flex:1;
+  min-width:0; /* Позволяет сжиматься */
+  overflow:visible; /* Не обрезаем текст */
+  /* Защита от обрезки текста */
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+}
+/* Блок с кнопками - второй div */
+.wmb-sticky > div:last-child{
+  display:flex;
+  gap:8px;
+  flex-direction:column;
+  flex:1;
+  min-width:0; /* Позволяет сжиматься */
+  max-width:100%;
+}
+.wmb-sticky .wmb-checkout-btn{
+  width:100%;
+  min-width:0; /* Убираем фиксированную ширину */
+  white-space:normal; /* Текст может переноситься */
+  overflow:visible;
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  text-align:center;
+  padding:10px 14px; /* Увеличиваем padding для лучшей читаемости */
+}
+.wmb-sticky .wmb-clear-cart-btn{
+  width:100%;
+  min-width:0; /* Убираем фиксированную ширину */
+  font-size:13px;
+  padding:8px 12px;
+  white-space:normal; /* Текст может переноситься */
+  overflow:visible;
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  text-align:center;
+}
+@media (max-width:768px){
+  .wmb-sticky{
+    display:flex;
+  }
+  .wmb-sidebar{
+    display:none;
+  }
+  .wmb-wrapper{
+    padding-bottom:120px; /* Увеличиваем отступ для sticky плашки с учетом двух кнопок */
+  }
+}
+/* На очень маленьких экранах делаем вертикальный layout */
+@media (max-width:480px){
+  .wmb-sticky{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .wmb-sticky > div:first-child{
+    width:100%;
+    text-align:center;
+  }
+  .wmb-sticky > div:last-child{
+    width:100%;
+  }
+}
+
+/* Принудительно показываем сайдбар на десктопе */
+@media (min-width:769px){
+  .wmb-sidebar{display:block !important}
+  .wmb-sticky{display:none !important}
+}
+
+/* Empty / loading */
+.wmb-empty,.wmb-loading{padding:20px;color:#666}
+
+/* ============ Ingredients modal ============ */
+#wmb-ing-modal{position:fixed;inset:0;display:none}
+#wmb-ing-modal.open{display:block}
+#wmb-ing-modal .back{position:absolute;inset:0;background:rgba(0,0,0,.35)}
+#wmb-ing-modal .dialog{position:relative;max-width:960px;margin:60px auto;background:#fff;border-radius:24px;padding:20px}
+#wmb-ing-modal .close{position:absolute;top:8px;right:12px;border:0;background:transparent;font-size:26px;cursor:pointer}
+#wmb-ing-modal h3{margin:0 24px 4px 0;font-size:22px}
+#wmb-ing-modal pre{margin:6px 0 0;font-family:inherit;font-size:16px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+
+/* Long text/scroll fix */
+#wmb-ing-modal .dialog{
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+/* ============ Allergens modal ============ */
+#wmb-allergens-modal{position:fixed;inset:0;display:none}
+#wmb-allergens-modal.open{display:block}
+#wmb-allergens-modal .back{position:absolute;inset:0;background:rgba(0,0,0,.35)}
+#wmb-allergens-modal .dialog{position:relative;max-width:600px;margin:60px auto;background:#fff;border-radius:24px;padding:20px}
+#wmb-allergens-modal .close{position:absolute;top:8px;right:12px;border:0;background:transparent;font-size:26px;cursor:pointer}
+#wmb-allergens-modal h3{margin:0 24px 4px 0;font-size:22px}
+#wmb-allergens-modal .allergens-list{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+#wmb-allergens-modal .allergen-pill{display:inline-block;padding:8px 16px;border-radius:999px;background:#fff3cd;border:1px solid #ffeaa7;color:#856404;font-weight:500}
+
+/* ============ Photo modal ============ */
+#wmb-photo-modal{position:fixed;inset:0;display:none;z-index:10000}
+#wmb-photo-modal.open{display:flex;align-items:center;justify-content:center}
+#wmb-photo-modal .back{position:absolute;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(4px)}
+#wmb-photo-modal .dialog{
+  position:relative;
+  max-width:90vw;
+  max-height:90vh;
+  background:#fff;
+  border-radius:16px;
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  z-index:10001;
+}
+#wmb-photo-modal .close{
+  position:absolute;
+  top:12px;
+  right:12px;
+  border:0;
+  background:rgba(255,255,255,.9);
+  border-radius:50%;
+  width:36px;
+  height:36px;
+  font-size:24px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:10002;
+  transition:all 0.2s ease;
+}
+#wmb-photo-modal .close:hover{
+  background:#fff;
+  transform:scale(1.1);
+}
+#wmb-photo-modal h3{
+  margin:0 40px 12px 0;
+  font-size:20px;
+  font-weight:600;
+}
+.wmb-photo-container{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border-radius:8px;
+  background:#f5f5f5;
+  min-height:200px;
+  max-height:calc(90vh - 100px);
+}
+.wmb-photo-container img{
+  max-width:100%;
+  max-height:100%;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  display:block;
+}
+@media (max-width:768px){
+  #wmb-photo-modal .dialog{
+    max-width:95vw;
+    max-height:95vh;
+    padding:16px;
+  }
+  #wmb-photo-modal h3{
+    font-size:18px;
+    margin-bottom:8px;
+  }
+  .wmb-photo-container{
+    max-height:calc(95vh - 80px);
+  }
+}
+
+/* ============ Sticky Fixes ============ */
+/* Убираем возможные ограничения от родительских элементов */
+.wmb-wrapper,
+.wmb-body,
+.wmb-catalog{
+  overflow: visible !important;
+  transform: none !important;
+  contain: none !important;
+}
+
+/* Дополнительные правила для sticky sidebar */
+@media (min-width: 769px){
+  .wmb-sidebar{
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 24px !important;
+    align-self: start !important;
+    height: max-content !important;
+    z-index: 10 !important;
+  }
+  
+  .wmb-summary{
+    position: relative !important;
+    z-index: 10 !important;
+  }
+  
+  /* Обеспечиваем правильную работу grid layout */
+  .wmb-body{
+    display: grid !important;
+    grid-template-columns: 1fr 320px !important;
+    align-items: start !important;
+    gap: 24px !important;
+  }
+}
+
+/* ============ АГРЕССИВНЫЕ STICKY ПРАВИЛА ============ */
+/* Принудительно применяем sticky ко всем возможным селекторам */
+#meal-builder-root .wmb-sidebar,
+#meal-builder-root aside.wmb-sidebar,
+.wmb-sidebar,
+aside.wmb-sidebar{
+  position: -webkit-sticky !important;
+  position: sticky !important;
+  top: 24px !important;
+  z-index: 999 !important;
+  align-self: start !important;
+  height: max-content !important;
+}
+
+/* Убираем все возможные ограничения от родительских элементов */
+#meal-builder-root,
+#meal-builder-root *,
+.wmb-wrapper,
+.wmb-wrapper *,
+.wmb-body,
+.wmb-body *,
+.wmb-catalog,
+.wmb-catalog *{
+  overflow: visible !important;
+  transform: none !important;
+  contain: none !important;
+  isolation: auto !important;
+}
+
+/* Дополнительная защита для grid */
+@media (min-width: 769px){
+  .wmb-body{
+    display: grid !important;
+    grid-template-columns: 1fr 320px !important;
+    align-items: start !important;
+    gap: 24px !important;
+    overflow: visible !important;
+  }
+  
+  .wmb-catalog{
+    overflow: visible !important;
+    min-height: 100vh !important;
+  }
+}
+
+/* ============ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ STICKY ============ */
+/* Исправляем все возможные конфликты для правильной работы sticky */
+@media (min-width: 769px) {
+  /* Принудительно убираем все ограничения от родительских элементов */
+  html, body {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Убираем ограничения от WordPress контейнеров */
+  .wp-site-blocks,
+  main,
+  .gl-container,
+  .wp-block-group,
+  .wp-block-post-content {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    transform: none !important;
+    contain: none !important;
+    isolation: auto !important;
+  }
+  
+  #meal-builder-root, 
+  .wmb-wrapper, 
+  .wmb-body, 
+  .wmb-catalog {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    transform: none !important;
+    contain: none !important;
+    isolation: auto !important;
+  }
+  
+  /* Принудительно применяем sticky к sidebar */
+  .wmb-sidebar,
+  aside.wmb-sidebar,
+  #meal-builder-root .wmb-sidebar,
+  #meal-builder-root aside.wmb-sidebar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 24px !important;
+    z-index: 100 !important;
+    align-self: start !important;
+    height: fit-content !important;
+    max-height: calc(100vh - 48px) !important;
+    overflow-y: auto !important;
+    display: block !important;
+    visibility: visible !important;
+    will-change: transform !important;
+  }
+  
+  /* Убираем возможные ограничения от grid */
+  .wmb-body {
+    display: grid !important;
+    grid-template-columns: 1fr 320px !important;
+    align-items: start !important;
+    gap: 24px !important;
+    overflow: visible !important;
+    position: relative !important;
+    min-height: 100vh !important; /* КРИТИЧНО для работы sticky */
+  }
+  
+  /* Убеждаемся что wrapper не ограничивает */
+  .wmb-wrapper {
+    overflow: visible !important;
+    position: relative !important;
+    min-height: 100vh !important; /* КРИТИЧНО для работы sticky */
+  }
+  
+  /* Убеждаемся что root тоже не ограничивает */
+  #meal-builder-root {
+    overflow: visible !important;
+    position: relative !important;
+    min-height: 100vh !important;
+  }
+  
+  /* Убеждаемся что WordPress контейнеры тоже имеют достаточную высоту */
+  body:has(#meal-builder-root) main,
+  body:has(#meal-builder-root) .wp-site-blocks,
+  body:has(#meal-builder-root) .wp-block-post-content {
+    overflow: visible !important;
+    min-height: 100vh !important;
+  }
+  
+  /* Fallback для браузеров без поддержки :has() */
+  main .wmb-wrapper,
+  .wp-site-blocks .wmb-wrapper,
+  .wp-block-post-content .wmb-wrapper {
+    min-height: 100vh !important;
+  }
+}

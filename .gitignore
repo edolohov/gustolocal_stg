@@ -1,0 +1,50 @@
+# OS/IDE
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# Node/Composer (если вдруг есть)
+node_modules/
+vendor/
+.dist/
+build/
+.cache/
+
+# WP uploads/cache
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/debug.log
+
+# WP MU plugins (env-specific)
+wp-content/mu-plugins/
+
+# Server-specific files (should not be committed)
+.htaccess
+wp-config.php
+
+# Credentials - НИКОГДА не коммитить!
+.env.local
+.env.production
+.env.staging
+*.env
+secrets/
+credentials/
+
+# WordPress configs с паролями
+wp-config-local.php
+wp-config-production.php
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+known_hosts
+
+# Database dumps с данными
+*.sql
+*.dump
+!database/schema.sql  # только схемы без данных
+
