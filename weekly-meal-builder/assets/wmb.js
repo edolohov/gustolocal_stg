@@ -1452,40 +1452,81 @@
   // Глобальный обработчик событий для делегирования (один раз, не дублируется)
   var globalClickHandler = function(e){
     var t = e.target;
-    var root = document.getElementById('meal-builder-root');
-    if (!root) return;
     
-    // Кнопки количества
-    if (t.classList.contains('wmb-qty-inc')) {
-      e.preventDefault();
-      e.stopPropagation();
-      changeQty(t.dataset.id, +1, root);
-      updateSummary();
-    } else if (t.classList.contains('wmb-qty-dec')) {
-      e.preventDefault();
-      e.stopPropagation();
-      changeQty(t.dataset.id, -1, root);
-      updateSummary();
+    // Ищем кнопку через closest - это работает даже если клик на дочернем элементе
+    // Это особенно важно когда gtranslate оборачивает текст внутри кнопок
+    var incBtn = t.closest('.wmb-qty-inc');
+    var decBtn = t.closest('.wmb-qty-dec');
+    
+    // Обрабатываем кнопку плюс
+    if (incBtn) {
+      var itemId = incBtn.getAttribute('data-id');
+      if (itemId) {
+        var root = document.getElementById('meal-builder-root');
+        if (root) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Вызываем синхронно
+          changeQty(itemId, +1, root);
+          updateSummary();
+          
+          return false;
+        }
+      }
     }
-    // Кнопки состава и аллергенов
-    else if (t.classList.contains('wmb-ing-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      openIngredientsFor(t.getAttribute('data-id'));
-    } else if (t.classList.contains('wmb-allergens-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      openAllergensFor(t.getAttribute('data-id'));
+    
+    // Обрабатываем кнопку минус
+    if (decBtn && !decBtn.disabled) {
+      var itemId = decBtn.getAttribute('data-id');
+      if (itemId) {
+        var root = document.getElementById('meal-builder-root');
+        if (root) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          changeQty(itemId, -1, root);
+          updateSummary();
+          
+          return false;
+        }
+      }
     }
+    
+    // Кнопки состава и аллергенов - также используем closest()
+    var ingBtn = t.closest('.wmb-ing-btn');
+    var allergensBtn = t.closest('.wmb-allergens-btn');
+    
+    if (ingBtn) {
+      var itemId = ingBtn.getAttribute('data-id');
+      if (itemId) {
+        e.preventDefault();
+        e.stopPropagation();
+        openIngredientsFor(itemId);
+        return false;
+      }
+    }
+    
+    if (allergensBtn) {
+      var itemId = allergensBtn.getAttribute('data-id');
+      if (itemId) {
+        e.preventDefault();
+        e.stopPropagation();
+        openAllergensFor(itemId);
+        return false;
+      }
+    }
+    
     // Клик на фото для открытия в модальном окне
-    else if (t.classList.contains('wmb-photo-clickable') || t.closest('.wmb-photo-clickable')) {
+    var photoEl = t.closest('.wmb-photo-clickable');
+    if (photoEl) {
       e.preventDefault();
       e.stopPropagation();
-      var img = t.classList.contains('wmb-photo-clickable') ? t : t.closest('.wmb-photo-clickable');
-      var url = img.getAttribute('data-photo-url') || img.src;
-      var alt = img.getAttribute('data-photo-alt') || img.alt;
-      var title = img.getAttribute('data-photo-title') || '';
+      var url = photoEl.getAttribute('data-photo-url') || photoEl.src;
+      var alt = photoEl.getAttribute('data-photo-alt') || photoEl.alt;
+      var title = photoEl.getAttribute('data-photo-title') || '';
       openPhotoFor(url, alt, title);
+      return false;
     }
   };
   

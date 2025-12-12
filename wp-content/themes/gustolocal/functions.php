@@ -37,6 +37,11 @@ add_action( 'wp_enqueue_scripts', function () {
     }
 } );
 
+// SEO: Запрещаем индексацию staging окружения
+add_action( 'wp_head', function() {
+    echo '<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">' . "\n";
+}, 1);
+
 // Inline стили для формы Contact Form 7 - принудительное применение
 add_action( 'wp_head', function () {
     ?>
